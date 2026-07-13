@@ -1,0 +1,78 @@
+{
+  "familyName": "The Whitfield Family",
+  "tagline": "Four generations, one story",
+  "people": [
+    {
+      "id": "p1",
+      "name": "Eleanor Whitfield",
+      "born": "1932",
+      "died": "2011",
+      "photo": "",
+      "bio": "Matriarch. Grew up on the family farm in Ohio.",
+      "parents": []
+    },
+    {
+      "id": "p2",
+      "name": "Harold Whitfield",
+      "born": "1929",
+      "died": "2004",
+      "photo": "",
+      "bio": "Married Eleanor in 1951.",
+      "parents": []
+    },
+    {
+      "id": "p3",
+      "name": "Margaret Whitfield",
+      "born": "1953",
+      "died": "",
+      "photo": "",
+      "bio": "",
+      "parents": ["p1", "p2"]
+    },
+    {
+      "id": "p4",
+      "name": "Robert Hayes",
+      "born": "1951",
+      "died": "",
+      "photo": "",
+      "bio": "",
+      "parents": []
+    },
+    {
+      "id": "p5",
+      "name": "David Whitfield",
+      "born": "1956",
+      "died": "",
+      "photo": "",
+      "bio": "",
+      "parents": ["p1", "p2"]
+    },
+    {
+      "id": "p6",
+      "name": "Sarah Hayes",
+      "born": "1978",
+      "died": "",
+      "photo": "",
+      "bio": "",
+      "parents": ["p3", "p4"]
+    },
+    {
+      "id": "p7",
+      "name": "James Hayes",
+      "born": "1981",
+      "died": "",
+      "photo": "",
+      "bio": "",
+      "parents": ["p3", "p4"]
+    },
+    {
+      "id": "p8",
+      "name": "Lucy Whitfield",
+      "born": "2005",
+      "died": "",
+      "photo": "",
+      "bio": "",
+      "parents": ["p6"]
+    }
+  ]
+}
