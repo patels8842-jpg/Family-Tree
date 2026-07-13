@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>Family Archive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<!-- LOCK SCREEN -->
+<div id="lockScreen" class="lock-screen">
+  <div class="ledger">
+    <div class="ledger-band"></div>
+    <p class="ledger-eyebrow">Private Family Archive</p>
+    <h1 class="ledger-title">The Family Tree</h1>
+    <p class="ledger-sub">Enter the family password to open the record.</p>
+    <form id="lockForm" autocomplete="off">
+      <input type="password" id="passwordInput" placeholder="Password" autocomplete="off" />
+      <button type="submit">Open the Archive</button>
+    </form>
+    <p id="lockError" class="lock-error" hidden>That's not quite it — ask a family member for the password.</p>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app" class="app" hidden>
+  <header class="site-header">
+    <p class="eyebrow">Private Family Archive</p>
+    <h1 id="familyName">—</h1>
+    <p id="tagline" class="tagline"></p>
+  </header>
+
+  <main id="treeWrap" class="tree-wrap">
+    <svg id="connectors" class="connectors"></svg>
+    <div id="treeContainer" class="tree-container"></div>
+  </main>
+
+  <footer class="site-footer">
+    <p>Want to add a photo or a person? Ask an editor in the family, or see the
+      <a href="https://github.com" id="repoLink" target="_blank" rel="noopener">repository</a> if you have access.</p>
+  </footer>
+</div>
+
+<!-- PERSON MODAL -->
+<div id="modal" class="modal" hidden>
+  <div class="modal-card">
+    <button id="modalClose" class="modal-close" aria-label="Close">×</button>
+    <div id="modalPhoto" class="modal-photo"></div>
+    <h2 id="modalName"></h2>
+    <p id="modalDates" class="modal-dates"></p>
+    <p id="modalBio" class="modal-bio"></p>
+  </div>
+</div>
+
+<script src="assets/app.js"></script>
+</body>
+</html>
