@@ -31,8 +31,9 @@
 <div id="app" class="app" hidden>
   <header class="site-header">
     <p class="eyebrow">Private Family Archive</p>
-    <h1 id="familyName">—</h1>
-    <p id="tagline" class="tagline"></p>
+    <h1>The Whitfield Family</h1>
+    <p class="tagline">Tap + to add family, tap the camera to add a photo</p>
+    <button id="addPersonBtn" class="add-person-top-btn" type="button">+ Add a person</button>
   </header>
 
   <main id="treeWrap" class="tree-wrap">
@@ -41,22 +42,24 @@
   </main>
 
   <footer class="site-footer">
-    <p>Want to add a photo or a person? Ask an editor in the family, or see the
-      <a href="https://github.com" id="repoLink" target="_blank" rel="noopener">repository</a> if you have access.</p>
+    <p>This tree is shared with family. Anyone with the password can add people and photos.</p>
   </footer>
 </div>
 
-<!-- PERSON MODAL -->
-<div id="modal" class="modal" hidden>
+<!-- ADD PERSON MODAL -->
+<div id="addModal" class="modal" hidden>
   <div class="modal-card">
-    <button id="modalClose" class="modal-close" aria-label="Close">×</button>
-    <div id="modalPhoto" class="modal-photo"></div>
-    <h2 id="modalName"></h2>
-    <p id="modalDates" class="modal-dates"></p>
-    <p id="modalBio" class="modal-bio"></p>
+    <button id="addModalClose" class="modal-close" aria-label="Close">×</button>
+    <h2>Add a person</h2>
+    <form id="addForm" class="add-form">
+      <label>Name<br><input type="text" id="addNameInput" required /></label>
+      <label>Spouse name (optional)<br><input type="text" id="addSpouseInput" /></label>
+      <button type="submit">Add</button>
+    </form>
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="assets/app.js"></script>
 </body>
 </html>
