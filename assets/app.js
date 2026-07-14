@@ -1,12 +1,13 @@
 /* ============================================================
-   FAMILY ARCHIVE — app logic
-   No build step. No server. Everything runs in the browser.
+   FAMILY ARCHIVE — app logic (Supabase-powered)
    ============================================================ */
 
-/* ---------- 1. PASSWORD GATE ----------
-   This is NOT real security — anyone who views the page source
-   or the repo's data can get in. It just keeps casual visitors
-   and search engines out. See README.md to change the password. */
+/* ---------- 0. SUPABASE SETUP ---------- */
+const SUPABASE_URL = "https://dawznfhpekxkmavhhysp.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRhd3puZmhwZWt4a21hdmhoeXNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5ODUxMzgsImV4cCI6MjA5OTU2MTEzOH0.zri14vTDwzXWflIWPu_zPCSj10BFoQ0TpAoTI8EiipA";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ---------- 1. PASSWORD GATE ---------- */
 const PASSWORD_HASH = "7dce034e548b1e319664a6f0d28c30d61f3c5fb9765b76aa8c73bd5e391302fc"; // default: family2026
 
 async function sha256(text) {
@@ -24,7 +25,7 @@ function unlock() {
   sessionStorage.setItem("familyArchiveUnlocked", "1");
   lockScreen.hidden = true;
   app.hidden = false;
-  initTree();
+  loadTree();
 }
 
 if (sessionStorage.getItem("familyArchiveUnlocked") === "1") {
@@ -43,24 +44,19 @@ if (sessionStorage.getItem("familyArchiveUnlocked") === "1") {
   });
 }
 
-/* ---------- 2. LOAD DATA & BUILD TREE ---------- */
-let familyData = null;
+/* ---------- 2. LOAD & RENDER TREE ---------- */
+let peopleCache = [];
 
-async function initTree() {
-  const res = await fetch("data/family.json", { cache: "no-store" });
-  familyData = await res.json();
-
-  document.getElementById("familyName").textContent = familyData.familyName || "Our Family";
-  document.getElementById("tagline").textContent = familyData.tagline || "";
-
-  renderTree(familyData.people);
-  window.addEventListener("resize", () => drawConnectors(familyData.people));
+async function loadTree() {
+  const { data, error } = await sb.from("people").select("*").order("created_at", { ascending: true });
+  if (error) { console.error(error); return; }
+  peopleCache = data || [];
+  renderTree(peopleCache);
 }
 
 function renderTree(people) {
   const byId = new Map(people.map(p => [p.id, p]));
 
-  // --- compute generation depth for each person ---
   const gen = {};
   function getGen(id, seen) {
     seen = seen || new Set();
@@ -68,25 +64,12 @@ function renderTree(people) {
     if (seen.has(id)) { gen[id] = 0; return 0; }
     seen.add(id);
     const p = byId.get(id);
-    const parents = (p.parents || []).filter(pid => byId.has(pid));
-    if (parents.length === 0) { gen[id] = 0; return 0; }
-    const maxParentGen = Math.max(...parents.map(pid => getGen(pid, seen)));
-    gen[id] = maxParentGen + 1;
+    if (!p.parent_id || !byId.has(p.parent_id)) { gen[id] = 0; return 0; }
+    gen[id] = getGen(p.parent_id, seen) + 1;
     return gen[id];
   }
   people.forEach(p => getGen(p.id));
 
-  // --- group partners together (people who co-parent a child) ---
-  const partnerOf = new Map(); // id -> id of partner
-  people.forEach(p => {
-    if (p.parents && p.parents.length === 2) {
-      const [a, b] = p.parents;
-      partnerOf.set(a, b);
-      partnerOf.set(b, a);
-    }
-  });
-
-  // --- bucket people by generation ---
   const generations = {};
   people.forEach(p => {
     const g = gen[p.id];
@@ -96,37 +79,16 @@ function renderTree(people) {
   const container = document.getElementById("treeContainer");
   container.innerHTML = "";
 
+  if (people.length === 0) {
+    container.innerHTML = `<p style="text-align:center;color:var(--ink-soft);">No one in the tree yet — tap "+ Add a person" above to start.</p>`;
+    return;
+  }
+
   const maxGen = Math.max(...Object.keys(generations).map(Number));
   for (let g = 0; g <= maxGen; g++) {
     const row = document.createElement("div");
     row.className = "generation-row";
-    row.dataset.gen = g;
-
-    const peopleInGen = generations[g] || [];
-    const placed = new Set();
-
-    peopleInGen.forEach(p => {
-      if (placed.has(p.id)) return;
-      const partnerId = partnerOf.get(p.id);
-      const partner = partnerId && byId.get(partnerId) && gen[partnerId] === g ? byId.get(partnerId) : null;
-
-      if (partner && !placed.has(partner.id)) {
-        const group = document.createElement("div");
-        group.className = "couple-group";
-        group.appendChild(personCard(p));
-        const link = document.createElement("div");
-        link.className = "couple-link";
-        group.appendChild(link);
-        group.appendChild(personCard(partner));
-        row.appendChild(group);
-        placed.add(p.id);
-        placed.add(partner.id);
-      } else {
-        row.appendChild(personCard(p));
-        placed.add(p.id);
-      }
-    });
-
+    (generations[g] || []).forEach(p => row.appendChild(personCard(p)));
     container.appendChild(row);
   }
 
@@ -140,18 +102,14 @@ function initials(name) {
 function personCard(p) {
   const card = document.createElement("div");
   card.className = "person-card";
-  card.tabIndex = 0;
   card.dataset.id = p.id;
-  card.setAttribute("role", "button");
-  card.setAttribute("aria-label", `View details for ${p.name}`);
 
   const frame = document.createElement("div");
   frame.className = "photo-frame";
-  if (p.photo) {
+  if (p.photo_url) {
     const img = document.createElement("img");
-    img.src = p.photo;
+    img.src = p.photo_url;
     img.alt = p.name;
-    img.loading = "lazy";
     frame.appendChild(img);
   } else {
     const div = document.createElement("div");
@@ -164,6 +122,22 @@ function personCard(p) {
     corner.className = `corner ${c}`;
     frame.appendChild(corner);
   });
+
+  // camera / upload button
+  const camBtn = document.createElement("button");
+  camBtn.className = "camera-btn";
+  camBtn.type = "button";
+  camBtn.title = "Upload photo";
+  camBtn.textContent = "📷";
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.accept = "image/*";
+  fileInput.hidden = true;
+  fileInput.addEventListener("change", () => uploadPhoto(p.id, fileInput.files[0]));
+  camBtn.addEventListener("click", () => fileInput.click());
+  frame.appendChild(camBtn);
+  frame.appendChild(fileInput);
+
   card.appendChild(frame);
 
   const name = document.createElement("div");
@@ -171,20 +145,25 @@ function personCard(p) {
   name.textContent = p.name;
   card.appendChild(name);
 
-  const dates = document.createElement("div");
-  dates.className = "person-dates";
-  dates.textContent = [p.born, p.died].filter(Boolean).join(" – ");
-  card.appendChild(dates);
+  if (p.spouse_name) {
+    const spouse = document.createElement("div");
+    spouse.className = "spouse-name";
+    spouse.textContent = `(${p.spouse_name})`;
+    card.appendChild(spouse);
+  }
 
-  card.addEventListener("click", () => openModal(p));
-  card.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openModal(p); }
-  });
+  const plusBtn = document.createElement("button");
+  plusBtn.className = "plus-btn";
+  plusBtn.type = "button";
+  plusBtn.title = "Add sibling or child";
+  plusBtn.textContent = "+";
+  plusBtn.addEventListener("click", () => openAddModal(p));
+  card.appendChild(plusBtn);
 
   return card;
 }
 
-/* ---------- 3. CONNECTOR LINES (SVG, drawn from parents to children) ---------- */
+/* ---------- 3. CONNECTOR LINES ---------- */
 function drawConnectors(people) {
   const svg = document.getElementById("connectors");
   const wrap = document.getElementById("treeWrap");
@@ -203,50 +182,87 @@ function drawConnectors(people) {
   }
 
   people.forEach(p => {
-    if (!p.parents || p.parents.length === 0) return;
-    const parentCenters = p.parents.map(centerOf).filter(Boolean);
-    if (parentCenters.length === 0) return;
-
-    const parentX = parentCenters.reduce((sum, c) => sum + c.x, 0) / parentCenters.length;
-    const parentY = Math.max(...parentCenters.map(c => c.bottomY));
+    if (!p.parent_id) return;
+    const parent = centerOf(p.parent_id);
     const child = centerOf(p.id);
-    if (!child) return;
-
-    const midY = (parentY + child.topY) / 2;
+    if (!parent || !child) return;
+    const midY = (parent.bottomY + child.topY) / 2;
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    const d = `M ${parentX} ${parentY} C ${parentX} ${midY}, ${child.x} ${midY}, ${child.x} ${child.topY}`;
+    const d = `M ${parent.x} ${parent.bottomY} C ${parent.x} ${midY}, ${child.x} ${midY}, ${child.x} ${child.topY}`;
     path.setAttribute("d", d);
     svg.appendChild(path);
   });
 }
 
-/* ---------- 4. MODAL ---------- */
-const modal = document.getElementById("modal");
-const modalPhoto = document.getElementById("modalPhoto");
-const modalName = document.getElementById("modalName");
-const modalDates = document.getElementById("modalDates");
-const modalBio = document.getElementById("modalBio");
+/* ---------- 4. ADD PERSON MODAL ---------- */
+const addModal = document.getElementById("addModal");
+const addForm = document.getElementById("addForm");
+const addNameInput = document.getElementById("addNameInput");
+const addSpouseInput = document.getElementById("addSpouseInput");
+let addContext = { parentId: null }; // parentId to assign on submit
 
-function openModal(p) {
-  modalPhoto.innerHTML = "";
-  if (p.photo) {
-    const img = document.createElement("img");
-    img.src = p.photo;
-    img.alt = p.name;
-    modalPhoto.appendChild(img);
+function openAddModal(contextPerson) {
+  // remove any previous relation radios
+  const existingRadios = document.getElementById("relationRadios");
+  if (existingRadios) existingRadios.remove();
+
+  if (contextPerson) {
+    const radiosDiv = document.createElement("div");
+    radiosDiv.id = "relationRadios";
+    radiosDiv.className = "relation-radios";
+    radiosDiv.innerHTML = `
+      <label><input type="radio" name="relation" value="child" checked /> Son / Daughter of ${contextPerson.name}</label>
+      <label><input type="radio" name="relation" value="sibling" /> Brother / Sister of ${contextPerson.name}</label>
+    `;
+    addForm.insertBefore(radiosDiv, addForm.firstChild);
+    addContext = { contextPerson };
   } else {
-    const div = document.createElement("div");
-    div.className = "photo-initials";
-    div.textContent = initials(p.name);
-    modalPhoto.appendChild(div);
+    addContext = { contextPerson: null };
   }
-  modalName.textContent = p.name;
-  modalDates.textContent = [p.born, p.died].filter(Boolean).join(" – ");
-  modalBio.textContent = p.bio || "";
-  modal.hidden = false;
-  document.getElementById("modalClose").focus();
+
+  addNameInput.value = "";
+  addSpouseInput.value = "";
+  addModal.hidden = false;
+  addNameInput.focus();
 }
 
-document.getElementById("modalClose").addEventListener("click", () => modal.hidden = true);
-modal.addEventListener("click", (e) => { if (e.target === modal) modal.hidden = true; });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") modal.hidden = true; });
+document.getElementById("addPersonBtn").addEventListener("click", () => openAddModal(null));
+document.getElementById("addModalClose").addEventListener("click", () => addModal.hidden = true);
+addModal.addEventListener("click", (e) => { if (e.target === addModal) addModal.hidden = true; });
+
+addForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = addNameInput.value.trim();
+  const spouse = addSpouseInput.value.trim();
+  if (!name) return;
+
+  let parent_id = null;
+  if (addContext.contextPerson) {
+    const relation = addForm.querySelector('input[name="relation"]:checked').value;
+    parent_id = relation === "child" ? addContext.contextPerson.id : addContext.contextPerson.parent_id;
+  }
+
+  const { error } = await sb.from("people").insert({ name, spouse_name: spouse || null, parent_id });
+  if (error) { console.error(error); alert("Could not add person — check console."); return; }
+
+  addModal.hidden = true;
+  loadTree();
+});
+
+/* ---------- 5. PHOTO UPLOAD ---------- */
+async function uploadPhoto(personId, file) {
+  if (!file) return;
+  const ext = file.name.split(".").pop();
+  const path = `person_${personId}_${Date.now()}.${ext}`;
+
+  const { error: uploadError } = await sb.storage.from("photos").upload(path, file, { upsert: true });
+  if (uploadError) { console.error(uploadError); alert("Upload failed — check console."); return; }
+
+  const { data: urlData } = sb.storage.from("photos").getPublicUrl(path);
+  const publicUrl = urlData.publicUrl;
+
+  const { error: updateError } = await sb.from("people").update({ photo_url: publicUrl }).eq("id", personId);
+  if (updateError) { console.error(updateError); alert("Could not save photo link — check console."); return; }
+
+  loadTree();
+}
