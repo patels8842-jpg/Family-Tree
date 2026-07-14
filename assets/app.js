@@ -1,5 +1,5 @@
 /* ============================================================
-   FAMILY ARCHIVE — app logic (Supabase-powered, zoom + spouse photos)
+   FAMILY ARCHIVE — app logic (Supabase-powered, nested tree layout)
    ============================================================ */
 
 const SUPABASE_URL = "https://dawznfhpekxkmavhhysp.supabase.co";
@@ -43,7 +43,7 @@ if (sessionStorage.getItem("familyArchiveUnlocked") === "1") {
   });
 }
 
-/* ---------- 2. LOAD & RENDER TREE ---------- */
+/* ---------- 2. LOAD & RENDER TREE (proper nested structure) ---------- */
 let peopleCache = [];
 
 async function loadTree() {
@@ -53,49 +53,20 @@ async function loadTree() {
   renderTree(peopleCache);
 }
 
+function buildNode(person, allPeople) {
+  const li = document.createElement("li");
+  li.appendChild(personCard(person));
+
+  const kids = allPeople.filter(p => p.parent_id === person.id);
+  if (kids.length) {
+    const ul = document.createElement("ul");
+    kids.forEach(k => ul.appendChild(buildNode(k, allPeople)));
+    li.appendChild(ul);
+  }
+  return li;
+}
+
 function renderTree(people) {
-  const byId = new Map(people.map(p => [p.id, p]));
-
-  const gen = {};
-  function getGen(id, seen) {
-    seen = seen || new Set();
-    if (gen[id] !== undefined) return gen[id];
-    if (seen.has(id)) { gen[id] = 0; return 0; }
-    seen.add(id);
-    const p = byId.get(id);
-    if (!p.parent_id || !byId.has(p.parent_id)) { gen[id] = 0; return 0; }
-    gen[id] = getGen(p.parent_id, seen) + 1;
-    return gen[id];
-  }
-  people.forEach(p => getGen(p.id));
-
-  const generations = {};
-  people.forEach(p => {
-    const g = gen[p.id];
-    (generations[g] = generations[g] || []).push(p);
-  });
-
-  // --- NEW: order each generation so children cluster together
-  // under their parent, and parent groups appear in the same
-  // left-to-right order as the parents themselves. ---
-  const maxGenForSort = Math.max(...Object.keys(generations).map(Number));
-  let previousOrder = null; // array of ids, in display order, for the row above
-  for (let g = 0; g <= maxGenForSort; g++) {
-    const row = generations[g] || [];
-    if (previousOrder) {
-      const parentRank = new Map();
-      previousOrder.forEach((id, idx) => parentRank.set(id, idx));
-      row.sort((a, b) => {
-        const ra = parentRank.has(a.parent_id) ? parentRank.get(a.parent_id) : 999999;
-        const rb = parentRank.has(b.parent_id) ? parentRank.get(b.parent_id) : 999999;
-        if (ra !== rb) return ra - rb;
-        return 0; // keep original relative order (creation order) within same parent
-      });
-    }
-    previousOrder = row.map(p => p.id);
-    generations[g] = row;
-  }
-
   const container = document.getElementById("treeContainer");
   container.innerHTML = "";
 
@@ -104,18 +75,14 @@ function renderTree(people) {
     return;
   }
 
-  const maxGen = Math.max(...Object.keys(generations).map(Number));
-  for (let g = 0; g <= maxGen; g++) {
-    const row = document.createElement("div");
-    row.className = "generation-row";
-    (generations[g] || []).forEach(p => row.appendChild(personCard(p)));
-    container.appendChild(row);
-  }
+  const idSet = new Set(people.map(p => p.id));
+  const roots = people.filter(p => !p.parent_id || !idSet.has(p.parent_id));
 
-  requestAnimationFrame(() => {
-    drawConnectors(people);
-    fitToScreen();
-  });
+  const rootUl = document.createElement("ul");
+  roots.forEach(r => rootUl.appendChild(buildNode(r, people)));
+  container.appendChild(rootUl);
+
+  requestAnimationFrame(fitToScreen);
 }
 
 function initials(name) {
@@ -212,51 +179,18 @@ function personCard(p) {
   return card;
 }
 
-/* ---------- 3. CONNECTOR LINES ---------- */
-function drawConnectors(people) {
-  const svg = document.getElementById("connectors");
-  const wrap = document.getElementById("zoomInner");
-  svg.innerHTML = "";
-  const wrapRect = wrap.getBoundingClientRect();
-
-  function centerOf(id) {
-    const el = document.querySelector(`[data-id="${id}"]`);
-    if (!el) return null;
-    const r = el.getBoundingClientRect();
-    return {
-      x: (r.left + r.width / 2 - wrapRect.left) / currentZoom,
-      topY: (r.top - wrapRect.top) / currentZoom,
-      bottomY: (r.bottom - wrapRect.top) / currentZoom
-    };
-  }
-
-  people.forEach(p => {
-    if (!p.parent_id) return;
-    const parent = centerOf(p.parent_id);
-    const child = centerOf(p.id);
-    if (!parent || !child) return;
-    const midY = (parent.bottomY + child.topY) / 2;
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    const d = `M ${parent.x} ${parent.bottomY} C ${parent.x} ${midY}, ${child.x} ${midY}, ${child.x} ${child.topY}`;
-    path.setAttribute("d", d);
-    svg.appendChild(path);
-  });
-}
-
-/* ---------- 4. ZOOM CONTROLS ---------- */
+/* ---------- 3. ZOOM CONTROLS ---------- */
 let currentZoom = 1;
 
 function setZoom(z) {
   currentZoom = Math.min(1.5, Math.max(0.15, z));
   const inner = document.getElementById("zoomInner");
   inner.style.transform = `scale(${currentZoom})`;
-  requestAnimationFrame(() => drawConnectors(peopleCache));
 }
 
 function fitToScreen() {
   const wrap = document.getElementById("treeWrap");
   const inner = document.getElementById("zoomInner");
-  // reset to measure true unscaled width
   inner.style.transform = "scale(1)";
   const naturalWidth = inner.scrollWidth;
   const available = wrap.clientWidth - 24;
@@ -269,7 +203,7 @@ document.getElementById("zoomIn").addEventListener("click", () => setZoom(curren
 document.getElementById("zoomFit").addEventListener("click", fitToScreen);
 window.addEventListener("resize", () => fitToScreen());
 
-/* ---------- 5. ADD PERSON MODAL ---------- */
+/* ---------- 4. ADD PERSON MODAL ---------- */
 const addModal = document.getElementById("addModal");
 const addForm = document.getElementById("addForm");
 const addNameInput = document.getElementById("addNameInput");
@@ -323,7 +257,7 @@ addForm.addEventListener("submit", async (e) => {
   loadTree();
 });
 
-/* ---------- 6. VIEW PERSON MODAL ---------- */
+/* ---------- 5. VIEW PERSON MODAL ---------- */
 const viewModal = document.getElementById("viewModal");
 
 function fillViewPhoto(container, url, label) {
@@ -361,7 +295,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") { viewModal.hidden = true; addModal.hidden = true; }
 });
 
-/* ---------- 7. PHOTO UPLOAD ---------- */
+/* ---------- 6. PHOTO UPLOAD ---------- */
 async function uploadPhoto(personId, column, file) {
   if (!file) return;
   const ext = file.name.split(".").pop();
