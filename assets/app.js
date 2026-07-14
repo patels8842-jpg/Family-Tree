@@ -1,8 +1,7 @@
 /* ============================================================
-   FAMILY ARCHIVE — app logic (Supabase-powered)
+   FAMILY ARCHIVE — app logic (Supabase-powered, zoom + spouse photos)
    ============================================================ */
 
-/* ---------- 0. SUPABASE SETUP ---------- */
 const SUPABASE_URL = "https://dawznfhpekxkmavhhysp.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRhd3puZmhwZWt4a21hdmhoeXNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5ODUxMzgsImV4cCI6MjA5OTU2MTEzOH0.zri14vTDwzXWflIWPu_zPCSj10BFoQ0TpAoTI8EiipA";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -96,25 +95,22 @@ function renderTree(people) {
 }
 
 function initials(name) {
-  return name.split(" ").filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
+  return (name || "").split(" ").filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
 }
 
-function personCard(p) {
-  const card = document.createElement("div");
-  card.className = "person-card";
-  card.dataset.id = p.id;
-
+function makePhotoFrame(url, label, onUpload, extraClass) {
   const frame = document.createElement("div");
-  frame.className = "photo-frame";
-  if (p.photo_url) {
+  frame.className = "photo-frame" + (extraClass ? " " + extraClass : "");
+
+  if (url) {
     const img = document.createElement("img");
-    img.src = p.photo_url;
-    img.alt = p.name;
+    img.src = url;
+    img.alt = label;
     frame.appendChild(img);
   } else {
     const div = document.createElement("div");
     div.className = "photo-initials";
-    div.textContent = initials(p.name);
+    div.textContent = label;
     frame.appendChild(div);
   }
   ["tl", "tr", "bl", "br"].forEach(c => {
@@ -123,7 +119,6 @@ function personCard(p) {
     frame.appendChild(corner);
   });
 
-  // camera / upload button
   const camBtn = document.createElement("button");
   camBtn.className = "camera-btn";
   camBtn.type = "button";
@@ -133,31 +128,61 @@ function personCard(p) {
   fileInput.type = "file";
   fileInput.accept = "image/*";
   fileInput.hidden = true;
-  fileInput.addEventListener("change", () => uploadPhoto(p.id, fileInput.files[0]));
-  camBtn.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", (e) => {
+    e.stopPropagation();
+    onUpload(fileInput.files[0]);
+  });
+  camBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    fileInput.click();
+  });
   frame.appendChild(camBtn);
   frame.appendChild(fileInput);
 
-  card.appendChild(frame);
+  return frame;
+}
+
+function personCard(p) {
+  const card = document.createElement("div");
+  card.className = "person-card";
+  card.dataset.id = p.id;
+
+  const photosRow = document.createElement("div");
+  photosRow.className = "photos-row";
+  photosRow.addEventListener("click", () => openViewModal(p));
+
+  const mainFrame = makePhotoFrame(p.photo_url, initials(p.name), (file) => uploadPhoto(p.id, "photo_url", file), "main-photo");
+  photosRow.appendChild(mainFrame);
+
+  if (p.spouse_name) {
+    const spouseFrame = makePhotoFrame(p.spouse_photo_url, initials(p.spouse_name), (file) => uploadPhoto(p.id, "spouse_photo_url", file), "spouse-photo");
+    photosRow.appendChild(spouseFrame);
+  }
+  card.appendChild(photosRow);
+
+  const nameWrap = document.createElement("div");
+  nameWrap.className = "name-wrap";
+  nameWrap.addEventListener("click", () => openViewModal(p));
 
   const name = document.createElement("div");
   name.className = "person-name";
   name.textContent = p.name;
-  card.appendChild(name);
+  nameWrap.appendChild(name);
 
   if (p.spouse_name) {
     const spouse = document.createElement("div");
     spouse.className = "spouse-name";
     spouse.textContent = `(${p.spouse_name})`;
-    card.appendChild(spouse);
+    nameWrap.appendChild(spouse);
   }
+  card.appendChild(nameWrap);
 
   const plusBtn = document.createElement("button");
   plusBtn.className = "plus-btn";
   plusBtn.type = "button";
   plusBtn.title = "Add sibling or child";
   plusBtn.textContent = "+";
-  plusBtn.addEventListener("click", () => openAddModal(p));
+  plusBtn.addEventListener("click", (e) => { e.stopPropagation(); openAddModal(p); });
   card.appendChild(plusBtn);
 
   return card;
@@ -166,7 +191,7 @@ function personCard(p) {
 /* ---------- 3. CONNECTOR LINES ---------- */
 function drawConnectors(people) {
   const svg = document.getElementById("connectors");
-  const wrap = document.getElementById("treeWrap");
+  const wrap = document.getElementById("zoomInner");
   svg.innerHTML = "";
   const wrapRect = wrap.getBoundingClientRect();
 
@@ -175,9 +200,9 @@ function drawConnectors(people) {
     if (!el) return null;
     const r = el.getBoundingClientRect();
     return {
-      x: r.left + r.width / 2 - wrapRect.left,
-      topY: r.top - wrapRect.top,
-      bottomY: r.bottom - wrapRect.top
+      x: (r.left + r.width / 2 - wrapRect.left) / currentZoom,
+      topY: (r.top - wrapRect.top) / currentZoom,
+      bottomY: (r.bottom - wrapRect.top) / currentZoom
     };
   }
 
@@ -194,15 +219,36 @@ function drawConnectors(people) {
   });
 }
 
-/* ---------- 4. ADD PERSON MODAL ---------- */
+/* ---------- 4. ZOOM CONTROLS ---------- */
+let currentZoom = 1;
+
+function setZoom(z) {
+  currentZoom = Math.min(1.5, Math.max(0.2, z));
+  const inner = document.getElementById("zoomInner");
+  inner.style.transform = `scale(${currentZoom})`;
+  requestAnimationFrame(() => drawConnectors(peopleCache));
+}
+
+document.getElementById("zoomOut").addEventListener("click", () => setZoom(currentZoom - 0.15));
+document.getElementById("zoomIn").addEventListener("click", () => setZoom(currentZoom + 0.15));
+document.getElementById("zoomFit").addEventListener("click", () => {
+  setZoom(1);
+  requestAnimationFrame(() => {
+    const wrap = document.getElementById("treeWrap");
+    const inner = document.getElementById("zoomInner");
+    const scale = Math.min(1, (wrap.clientWidth - 20) / inner.scrollWidth);
+    setZoom(scale > 0 ? scale : 0.2);
+  });
+});
+
+/* ---------- 5. ADD PERSON MODAL ---------- */
 const addModal = document.getElementById("addModal");
 const addForm = document.getElementById("addForm");
 const addNameInput = document.getElementById("addNameInput");
 const addSpouseInput = document.getElementById("addSpouseInput");
-let addContext = { parentId: null }; // parentId to assign on submit
+let addContext = { contextPerson: null };
 
 function openAddModal(contextPerson) {
-  // remove any previous relation radios
   const existingRadios = document.getElementById("relationRadios");
   if (existingRadios) existingRadios.remove();
 
@@ -249,19 +295,56 @@ addForm.addEventListener("submit", async (e) => {
   loadTree();
 });
 
-/* ---------- 5. PHOTO UPLOAD ---------- */
-async function uploadPhoto(personId, file) {
+/* ---------- 6. VIEW PERSON MODAL ---------- */
+const viewModal = document.getElementById("viewModal");
+
+function fillViewPhoto(container, url, label) {
+  container.innerHTML = "";
+  if (url) {
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = label;
+    container.appendChild(img);
+  } else {
+    const div = document.createElement("div");
+    div.className = "photo-initials";
+    div.textContent = label;
+    container.appendChild(div);
+  }
+}
+
+function openViewModal(p) {
+  fillViewPhoto(document.getElementById("viewMainPhoto"), p.photo_url, initials(p.name));
+  const spouseDiv = document.getElementById("viewSpousePhoto");
+  if (p.spouse_name) {
+    spouseDiv.hidden = false;
+    fillViewPhoto(spouseDiv, p.spouse_photo_url, initials(p.spouse_name));
+  } else {
+    spouseDiv.hidden = true;
+  }
+  document.getElementById("viewName").textContent = p.name;
+  document.getElementById("viewSpouseName").textContent = p.spouse_name ? `Spouse: ${p.spouse_name}` : "";
+  viewModal.hidden = false;
+}
+
+document.getElementById("viewModalClose").addEventListener("click", () => viewModal.hidden = true);
+viewModal.addEventListener("click", (e) => { if (e.target === viewModal) viewModal.hidden = true; });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") { viewModal.hidden = true; addModal.hidden = true; }
+});
+
+/* ---------- 7. PHOTO UPLOAD ---------- */
+async function uploadPhoto(personId, column, file) {
   if (!file) return;
   const ext = file.name.split(".").pop();
-  const path = `person_${personId}_${Date.now()}.${ext}`;
+  const path = `person_${personId}_${column}_${Date.now()}.${ext}`;
 
   const { error: uploadError } = await sb.storage.from("photos").upload(path, file, { upsert: true });
   if (uploadError) { console.error(uploadError); alert("Upload failed — check console."); return; }
 
   const { data: urlData } = sb.storage.from("photos").getPublicUrl(path);
-  const publicUrl = urlData.publicUrl;
 
-  const { error: updateError } = await sb.from("people").update({ photo_url: publicUrl }).eq("id", personId);
+  const { error: updateError } = await sb.from("people").update({ [column]: urlData.publicUrl }).eq("id", personId);
   if (updateError) { console.error(updateError); alert("Could not save photo link — check console."); return; }
 
   loadTree();
