@@ -75,6 +75,27 @@ function renderTree(people) {
     (generations[g] = generations[g] || []).push(p);
   });
 
+  // --- NEW: order each generation so children cluster together
+  // under their parent, and parent groups appear in the same
+  // left-to-right order as the parents themselves. ---
+  const maxGenForSort = Math.max(...Object.keys(generations).map(Number));
+  let previousOrder = null; // array of ids, in display order, for the row above
+  for (let g = 0; g <= maxGenForSort; g++) {
+    const row = generations[g] || [];
+    if (previousOrder) {
+      const parentRank = new Map();
+      previousOrder.forEach((id, idx) => parentRank.set(id, idx));
+      row.sort((a, b) => {
+        const ra = parentRank.has(a.parent_id) ? parentRank.get(a.parent_id) : 999999;
+        const rb = parentRank.has(b.parent_id) ? parentRank.get(b.parent_id) : 999999;
+        if (ra !== rb) return ra - rb;
+        return 0; // keep original relative order (creation order) within same parent
+      });
+    }
+    previousOrder = row.map(p => p.id);
+    generations[g] = row;
+  }
+
   const container = document.getElementById("treeContainer");
   container.innerHTML = "";
 
@@ -91,7 +112,10 @@ function renderTree(people) {
     container.appendChild(row);
   }
 
-  requestAnimationFrame(() => drawConnectors(people));
+  requestAnimationFrame(() => {
+    drawConnectors(people);
+    fitToScreen();
+  });
 }
 
 function initials(name) {
@@ -223,23 +247,27 @@ function drawConnectors(people) {
 let currentZoom = 1;
 
 function setZoom(z) {
-  currentZoom = Math.min(1.5, Math.max(0.2, z));
+  currentZoom = Math.min(1.5, Math.max(0.15, z));
   const inner = document.getElementById("zoomInner");
   inner.style.transform = `scale(${currentZoom})`;
   requestAnimationFrame(() => drawConnectors(peopleCache));
 }
 
+function fitToScreen() {
+  const wrap = document.getElementById("treeWrap");
+  const inner = document.getElementById("zoomInner");
+  // reset to measure true unscaled width
+  inner.style.transform = "scale(1)";
+  const naturalWidth = inner.scrollWidth;
+  const available = wrap.clientWidth - 24;
+  const scale = naturalWidth > available ? available / naturalWidth : 1;
+  setZoom(scale);
+}
+
 document.getElementById("zoomOut").addEventListener("click", () => setZoom(currentZoom - 0.15));
 document.getElementById("zoomIn").addEventListener("click", () => setZoom(currentZoom + 0.15));
-document.getElementById("zoomFit").addEventListener("click", () => {
-  setZoom(1);
-  requestAnimationFrame(() => {
-    const wrap = document.getElementById("treeWrap");
-    const inner = document.getElementById("zoomInner");
-    const scale = Math.min(1, (wrap.clientWidth - 20) / inner.scrollWidth);
-    setZoom(scale > 0 ? scale : 0.2);
-  });
-});
+document.getElementById("zoomFit").addEventListener("click", fitToScreen);
+window.addEventListener("resize", () => fitToScreen());
 
 /* ---------- 5. ADD PERSON MODAL ---------- */
 const addModal = document.getElementById("addModal");
