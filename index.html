@@ -32,13 +32,20 @@
   <header class="site-header">
     <p class="eyebrow">Private Family Archive</p>
     <h1>Patel - Chhaganlal Family</h1>
-    <p class="tagline">Tap + to add family, tap the camera to add a photo</p>
+    <p class="tagline">Tap + to add family, tap a photo to upload, tap a name to view</p>
     <button id="addPersonBtn" class="add-person-top-btn" type="button">+ Add a person</button>
+    <div class="zoom-controls">
+      <button id="zoomOut" type="button" title="Zoom out">−</button>
+      <button id="zoomFit" type="button" title="Fit to screen">Fit</button>
+      <button id="zoomIn" type="button" title="Zoom in">+</button>
+    </div>
   </header>
 
   <main id="treeWrap" class="tree-wrap">
-    <svg id="connectors" class="connectors"></svg>
-    <div id="treeContainer" class="tree-container"></div>
+    <div id="zoomInner" class="zoom-inner">
+      <svg id="connectors" class="connectors"></svg>
+      <div id="treeContainer" class="tree-container"></div>
+    </div>
   </main>
 
   <footer class="site-footer">
@@ -56,6 +63,19 @@
       <label>Spouse name (optional)<br><input type="text" id="addSpouseInput" /></label>
       <button type="submit">Add</button>
     </form>
+  </div>
+</div>
+
+<!-- VIEW PERSON MODAL -->
+<div id="viewModal" class="modal" hidden>
+  <div class="modal-card">
+    <button id="viewModalClose" class="modal-close" aria-label="Close">×</button>
+    <div class="view-photos">
+      <div id="viewMainPhoto" class="view-photo"></div>
+      <div id="viewSpousePhoto" class="view-photo" hidden></div>
+    </div>
+    <h2 id="viewName"></h2>
+    <p id="viewSpouseName" class="modal-dates"></p>
   </div>
 </div>
 
