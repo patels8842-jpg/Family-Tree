@@ -36,6 +36,7 @@ body {
 /* ---------- LOCK SCREEN ---------- */
 .lock-screen {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -121,6 +122,7 @@ body {
 /* ---------- APP SHELL ---------- */
 .app {
   height: 100vh;
+  height: 100dvh; /* iOS counts the address bar in vh; dvh doesn't */
   display: flex;
   flex-direction: column;
 }
@@ -643,11 +645,27 @@ body {
   color: var(--evergreen-deep);
 }
 
-/* ---------- MOBILE ---------- */
+/* ---------- MOBILE ----------
+   Every pixel spent on chrome is a pixel of tree you can't see, so the
+   header and toolbar get out of the way on a phone. */
 @media (max-width: 600px) {
-  .site-header { padding: 16px 20px 6px; }
-  .toolbar { gap: 12px; padding: 10px 14px; }
-  #searchInput { width: 100%; min-width: 160px; }
+  .site-header { padding: 10px 16px 2px; }
+  .eyebrow { font-size: 9px; letter-spacing: 0.12em; margin-bottom: 3px; }
+  .site-header h1 { font-size: 19px; }
+
+  .toolbar { gap: 8px; padding: 8px 12px; }
+  .search-group { flex: 1 1 100%; }
+  #searchInput { width: 100%; }
+  .tool-btn { height: 32px; min-width: 32px; }
+  .tool-btn.wide { padding: 0 10px; font-size: 12px; }
+
+  .hint { font-size: 11px; padding: 6px 12px 8px; }
+
+  .modal-card { padding: 26px 18px 20px; }
   .view-photos { gap: 12px; }
   .view-photo { width: 108px; height: 108px; }
+
+  /* the cropper reads its own width, so shrinking it here is safe */
+  .crop-stage, .crop-zoom { width: min(260px, 66vw); }
+  .crop-stage { height: min(260px, 66vw); }
 }

@@ -61,6 +61,7 @@ let forest = { roots: [], nodes: new Map() };
 const collapsed = new Set();          // ids whose descendants are hidden
 let showPhotos = localStorage.getItem("familyShowPhotos") === "1";
 let view = { x: 0, y: 0, k: 1 };      // canvas pan/zoom
+let hasOpened = false;                // first paint starts on the eldest, not fitted
 
 const viewport = document.getElementById("viewport");
 const canvas = document.getElementById("canvas");
@@ -163,7 +164,9 @@ function render({ keepView = false } = {}) {
   nodes.forEach(n => cardsLayer.appendChild(personCard(n)));
   drawConnectors(nodes);
 
-  if (keepView) applyView(); else fitToScreen();
+  if (keepView) applyView();
+  else if (!hasOpened) { hasOpened = true; openingView(); }
+  else fitToScreen();
 }
 
 function initials(name) {
@@ -288,6 +291,18 @@ function applyView() {
 }
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+/* Opening shot: the eldest at full size, near the top so their children
+   show underneath. Fitting the whole tree instead means a phone opens on
+   something unreadably small — you'd have to zoom in to learn anything. */
+function openingView() {
+  const root = forest.roots[0];
+  if (!root) { fitToScreen(); return; }
+  view.k = 1;
+  view.x = viewport.clientWidth / 2 - (root.x + CARD / 2) * view.k;
+  view.y = Math.max(24, viewport.clientHeight * 0.12) - root.y * view.k;
+  applyView();
+}
 
 function fitToScreen() {
   const box = bounds();
