@@ -550,6 +550,57 @@ body {
 .action-btn.danger { color: var(--rust); }
 .action-btn.danger:hover { background: var(--rust); border-color: var(--rust); color: #fff; }
 
+/* ---------- CROPPER ---------- */
+.crop-stage {
+  position: relative;
+  width: 260px;
+  height: 260px;
+  margin: 6px auto 14px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--evergreen-deep);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.crop-stage.is-dragging { cursor: grabbing; }
+
+#cropImage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  max-width: none;
+  -webkit-user-drag: none;
+}
+
+/* A guide, not a cut line: the circle is what a card shows, but the whole
+   square is saved and displayed full-size when someone opens the person. */
+.crop-ring {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 50%;
+  border: 2px solid rgba(251, 247, 238, 0.9);
+  box-shadow: 0 0 0 9999px rgba(38, 32, 26, 0.28);
+}
+
+.crop-zoom {
+  width: 260px;
+  margin: 0 auto 16px;
+  display: block;
+  accent-color: var(--evergreen);
+  cursor: pointer;
+}
+
+#cropTitle {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 20px;
+  margin: 0 0 4px;
+  color: var(--evergreen-deep);
+}
+
 .add-form {
   display: flex;
   flex-direction: column;

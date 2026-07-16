@@ -608,21 +608,161 @@ personForm.addEventListener("submit", async (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { personModal.hidden = true; formModal.hidden = true; }
+  if (e.key !== "Escape") return;
+  // Close the topmost thing only; the cropper has to cancel through its own
+  // button so the pending promise resolves and its listeners come off.
+  if (!cropModal.hidden) document.getElementById("cropCancel").click();
+  else { personModal.hidden = true; formModal.hidden = true; }
 });
 
-/* ---------- 10. PHOTO UPLOAD ---------- */
+/* ---------- 10. CROPPER ----------
+   Phone photos are big and rarely square, and the cards show a circle.
+   Let people frame the square themselves, then hand back a modest JPEG
+   rather than shipping a 5MB original into storage. */
+const cropModal = document.getElementById("cropModal");
+const cropStage = document.getElementById("cropStage");
+const cropImage = document.getElementById("cropImage");
+const cropZoom = document.getElementById("cropZoom");
+const OUT_SIZE = 600;
+
+function openCropper(file) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    let nat = { w: 0, h: 0 };
+    let base = 1, zoom = 1, tx = 0, ty = 0;
+    let drag = null;
+    const pts = new Map();
+    let pinch = null;
+
+    const S = () => cropStage.clientWidth;
+
+    function apply() {
+      const k = base * zoom;
+      // never let the image pull away from the square it has to fill
+      tx = Math.min(0, Math.max(S() - nat.w * k, tx));
+      ty = Math.min(0, Math.max(S() - nat.h * k, ty));
+      cropImage.style.transform = `translate(${tx}px, ${ty}px) scale(${k})`;
+    }
+
+    function zoomTo(next, cx, cy) {
+      const old = base * zoom;
+      const ix = (cx - tx) / old, iy = (cy - ty) / old;
+      zoom = clamp(next, 1, 4);
+      const k = base * zoom;
+      tx = cx - ix * k;
+      ty = cy - iy * k;
+      cropZoom.value = zoom;
+      apply();
+    }
+
+    function finish(blob) {
+      cleanup();
+      resolve(blob);
+    }
+
+    function cleanup() {
+      cropModal.hidden = true;
+      URL.revokeObjectURL(url);
+      cropStage.onpointerdown = cropStage.onpointermove = null;
+      cropStage.onpointerup = cropStage.onpointercancel = null;
+      cropStage.onwheel = cropZoom.oninput = null;
+      document.getElementById("cropConfirm").onclick = null;
+      document.getElementById("cropCancel").onclick = null;
+    }
+
+    cropImage.onload = () => {
+      nat = { w: cropImage.naturalWidth, h: cropImage.naturalHeight };
+      base = Math.max(S() / nat.w, S() / nat.h); // cover the square
+      zoom = 1;
+      tx = (S() - nat.w * base) / 2;
+      ty = (S() - nat.h * base) / 2;
+      cropZoom.value = 1;
+      apply();
+    };
+
+    cropImage.onerror = () => { alert("That file didn't look like an image."); finish(null); };
+
+    cropStage.onpointerdown = (e) => {
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      cropStage.setPointerCapture(e.pointerId);
+      cropStage.classList.add("is-dragging");
+      if (pts.size === 1) drag = { x: e.clientX - tx, y: e.clientY - ty };
+      else if (pts.size === 2) { drag = null; pinch = pinchDist(); }
+    };
+
+    cropStage.onpointermove = (e) => {
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 1 && drag) {
+        tx = e.clientX - drag.x;
+        ty = e.clientY - drag.y;
+        apply();
+      } else if (pts.size === 2 && pinch) {
+        const now = pinchDist();
+        const r = cropStage.getBoundingClientRect();
+        zoomTo(zoom * (now.dist / pinch.dist), now.cx - r.left, now.cy - r.top);
+        pinch = now;
+      }
+    };
+
+    const release = (e) => {
+      pts.delete(e.pointerId);
+      if (pts.size < 2) pinch = null;
+      if (pts.size === 0) { drag = null; cropStage.classList.remove("is-dragging"); }
+    };
+    cropStage.onpointerup = release;
+    cropStage.onpointercancel = release;
+
+    function pinchDist() {
+      const [a, b] = [...pts.values()];
+      return { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+    }
+
+    cropStage.onwheel = (e) => {
+      e.preventDefault();
+      const r = cropStage.getBoundingClientRect();
+      zoomTo(zoom * Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top);
+    };
+
+    cropZoom.oninput = () => zoomTo(+cropZoom.value, S() / 2, S() / 2);
+
+    document.getElementById("cropCancel").onclick = () => finish(null);
+    document.getElementById("cropConfirm").onclick = () => {
+      const k = base * zoom;
+      const c = document.createElement("canvas");
+      c.width = c.height = OUT_SIZE;
+      const ctx = c.getContext("2d");
+      ctx.imageSmoothingQuality = "high";
+      // map the visible square back onto the original pixels
+      ctx.drawImage(cropImage, -tx / k, -ty / k, S() / k, S() / k, 0, 0, OUT_SIZE, OUT_SIZE);
+      c.toBlob((blob) => finish(blob), "image/jpeg", 0.85);
+    };
+
+    cropImage.src = url;
+    cropModal.hidden = false;
+  });
+}
+
+/* ---------- 11. PHOTO UPLOAD ---------- */
 async function uploadPhoto(personId, column, file) {
   if (!file) return;
 
   uploadStatus.hidden = false;
   uploadStatus.textContent = "Uploading…";
 
-  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-  const path = `person_${personId}_${column}_${Date.now()}.${ext}`;
+  const path = `person_${personId}_${column}_${Date.now()}.jpg`;
 
-  const { error: uploadError } = await sb.storage.from("photos").upload(path, file, { upsert: true });
-  if (uploadError) { console.error(uploadError); uploadStatus.textContent = "Upload failed — check the console."; return; }
+  const { error: uploadError } = await sb.storage
+    .from("photos")
+    .upload(path, file, { upsert: true, contentType: "image/jpeg" });
+  if (uploadError) {
+    console.error(uploadError);
+    // The usual cause is a missing storage policy, not a broken file.
+    uploadStatus.textContent = /row-level security|Unauthorized/i.test(uploadError.message || "")
+      ? "Upload blocked by Supabase permissions — the photos bucket needs an upload policy."
+      : "Upload failed — check the console.";
+    return;
+  }
 
   const { data: urlData } = sb.storage.from("photos").getPublicUrl(path);
   const { error: updateError } = await sb.from("people").update({ [column]: urlData.publicUrl }).eq("id", personId);
@@ -642,9 +782,17 @@ function wireUpload(btnId, inputId, column) {
   const btn = document.getElementById(btnId);
   const input = document.getElementById(inputId);
   btn.addEventListener("click", () => input.click());
-  input.addEventListener("change", () => {
-    uploadPhoto(currentPerson.id, column, input.files[0]);
-    input.value = "";
+  input.addEventListener("change", async () => {
+    const file = input.files[0];
+    input.value = ""; // so picking the same file twice still fires
+    if (!file) return;
+
+    const person = currentPerson;
+    document.getElementById("cropTitle").textContent =
+      `Position ${column === "photo_url" ? person.name : person.spouse_name}'s photo`;
+
+    const cropped = await openCropper(file);
+    if (cropped) uploadPhoto(person.id, column, cropped);
   });
 }
 wireUpload("uploadMainBtn", "uploadMainInput", "photo_url");

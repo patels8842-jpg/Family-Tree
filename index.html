@@ -102,6 +102,26 @@
   </div>
 </div>
 
+<!-- CROP PHOTO MODAL -->
+<div id="cropModal" class="modal" hidden>
+  <div class="modal-card">
+    <h2 id="cropTitle">Position the photo</h2>
+    <p class="modal-dates">Drag to move · pinch or use the slider to zoom<br>The circle is what shows on the card — the full square is kept</p>
+
+    <div id="cropStage" class="crop-stage">
+      <img id="cropImage" alt="" draggable="false" />
+      <div class="crop-ring"></div>
+    </div>
+
+    <input type="range" id="cropZoom" class="crop-zoom" min="1" max="4" step="0.01" value="1" aria-label="Zoom" />
+
+    <div class="modal-actions">
+      <button type="button" id="cropConfirm" class="action-btn primary">Use this photo</button>
+      <button type="button" id="cropCancel" class="action-btn">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- ADD / EDIT PERSON MODAL -->
 <div id="formModal" class="modal" hidden>
   <div class="modal-card">
