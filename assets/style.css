@@ -1,4 +1,183 @@
-/* ---------- NEW: Zoom controls ---------- */
+:root {
+  --paper: #ECE4D2;
+  --paper-deep: #E2D8C0;
+  --card: #FBF7EE;
+  --ink: #2B2420;
+  --ink-soft: #6b5f4f;
+  --evergreen: #37473A;
+  --evergreen-deep: #263229;
+  --rust: #9C5A2E;
+  --gold: #B8935A;
+  --line: #B9AC8C;
+  --shadow: rgba(43, 36, 32, 0.18);
+
+  --font-display: "Fraunces", serif;
+  --font-body: "Work Sans", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+/* ---------- LOCK SCREEN ---------- */
+.lock-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(ellipse at top, #3f5142 0%, var(--evergreen-deep) 70%);
+  padding: 24px;
+}
+
+.ledger {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  background: var(--card);
+  border-radius: 4px;
+  padding: 48px 36px 40px;
+  text-align: center;
+  box-shadow: 0 30px 60px rgba(0,0,0,0.45);
+  overflow: hidden;
+}
+
+.ledger-band {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 8px;
+  background: linear-gradient(90deg, var(--rust), var(--gold));
+}
+
+.ledger-eyebrow {
+  font-family: var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 11px;
+  color: var(--ink-soft);
+  margin: 8px 0 4px;
+}
+
+.ledger-title {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 600;
+  font-size: 34px;
+  margin: 4px 0 10px;
+  color: var(--evergreen-deep);
+}
+
+.ledger-sub {
+  color: var(--ink-soft);
+  font-size: 14px;
+  margin: 0 0 26px;
+}
+
+#lockForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+#passwordInput {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  padding: 13px 14px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  background: #fff;
+  text-align: center;
+  letter-spacing: 0.06em;
+}
+
+#passwordInput:focus {
+  outline: 2px solid var(--rust);
+  outline-offset: 1px;
+}
+
+#lockForm button {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 13px 14px;
+  border-radius: 3px;
+  border: none;
+  background: var(--evergreen);
+  color: #f4efe1;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition: background 0.15s ease;
+}
+
+#lockForm button:hover { background: var(--evergreen-deep); }
+#lockForm button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+.lock-error {
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--rust);
+}
+
+/* ---------- APP SHELL ---------- */
+.app { min-height: 100vh; }
+
+.site-header {
+  text-align: center;
+  padding: 40px 24px 16px;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 10px;
+}
+
+.site-header h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(26px, 5vw, 46px);
+  margin: 0;
+  color: var(--evergreen-deep);
+}
+
+.tagline {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin-top: 8px;
+  font-style: italic;
+}
+
+.tree-wrap {
+  position: relative;
+  padding: 20px 12px 60px;
+  max-width: 100%;
+  margin: 0 auto;
+  overflow-x: auto;
+}
+
+.zoom-inner {
+  transform-origin: top center;
+  transition: transform 0.15s ease;
+  width: fit-content;
+  margin: 0 auto;
+}
+
+/* ---------- ZOOM CONTROLS ---------- */
 .zoom-controls {
   display: flex;
   justify-content: center;
@@ -19,26 +198,242 @@
 .zoom-controls button:hover { background: var(--paper-deep); }
 #zoomFit { width: auto; padding: 0 12px; }
 
-.zoom-inner {
-  transform-origin: top center;
-  transition: transform 0.15s ease;
+/* ---------- TREE STRUCTURE (nested org-chart style) ---------- */
+.fam-tree, .fam-tree ul, .fam-tree li {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   position: relative;
 }
 
-/* ---------- NEW: Two-photo layout (main + spouse) ---------- */
+.fam-tree { display: flex; justify-content: center; }
+
+.fam-tree ul {
+  display: flex;
+  padding-top: 44px;
+  position: relative;
+}
+
+.fam-tree > ul { padding-top: 0; }
+
+.fam-tree li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 44px 12px 0 12px;
+  position: relative;
+}
+
+.fam-tree li::before,
+.fam-tree li::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 50%;
+  width: 50%;
+  height: 44px;
+  border-top: 2px solid var(--gold);
+}
+.fam-tree li::after {
+  right: auto;
+  left: 50%;
+  border-left: 2px solid var(--gold);
+}
+.fam-tree li:only-child { padding-top: 0; }
+.fam-tree li:only-child::before,
+.fam-tree li:only-child::after { display: none; }
+.fam-tree li:first-child::before { border: none; }
+.fam-tree li:last-child::after { border: none; }
+.fam-tree li:last-child::before {
+  border-right: 2px solid var(--gold);
+  border-radius: 0 6px 0 0;
+}
+.fam-tree li:first-child::after { border-radius: 6px 0 0 0; }
+
+.fam-tree > ul > li { padding-top: 0; }
+.fam-tree > ul > li::before,
+.fam-tree > ul > li::after { display: none; }
+
+.fam-tree li > ul::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  border-left: 2px solid var(--gold);
+  width: 0;
+  height: 44px;
+}
+
+/* ---------- PERSON CARD ---------- */
+.person-card {
+  width: 190px;
+  background: var(--card);
+  border-radius: 3px;
+  padding: 10px 10px 14px;
+  text-align: center;
+  box-shadow: 0 6px 16px var(--shadow);
+  position: relative;
+}
+
 .photos-row {
   display: flex;
   gap: 6px;
   justify-content: center;
   cursor: pointer;
 }
+.photo-frame {
+  position: relative;
+  background: var(--paper-deep);
+  border-radius: 2px;
+  overflow: hidden;
+  aspect-ratio: 1 / 1;
+}
 .photo-frame.main-photo { width: 100px; }
 .photo-frame.spouse-photo { width: 70px; align-self: flex-end; }
-.photos-row .photo-frame { margin-bottom: 0; aspect-ratio: 1/1; }
+
+.photo-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.photo-initials {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 26px;
+  color: var(--evergreen);
+  background: linear-gradient(160deg, #E8DFC8, #DCCFAE);
+}
+
+.corner {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: solid var(--gold);
+  opacity: 0.9;
+}
+.corner.tl { top: 3px; left: 3px; border-width: 2px 0 0 2px; }
+.corner.tr { top: 3px; right: 3px; border-width: 2px 2px 0 0; }
+.corner.bl { bottom: 3px; left: 3px; border-width: 0 0 2px 2px; }
+.corner.br { bottom: 3px; right: 3px; border-width: 0 2px 2px 0; }
+
+.camera-btn {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(251, 247, 238, 0.92);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.camera-btn:hover { background: #fff; }
 
 .name-wrap { cursor: pointer; margin-top: 8px; }
 
-/* ---------- NEW: View modal photos side by side ---------- */
+.person-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 14.5px;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.spouse-name {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-style: italic;
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+
+.plus-btn {
+  margin-top: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--gold);
+  background: var(--card);
+  color: var(--evergreen);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  margin-right: auto;
+}
+.plus-btn:hover { background: var(--gold); color: #fff; }
+
+/* ---------- MODALS ---------- */
+.add-person-top-btn {
+  margin-top: 18px;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 13.5px;
+  padding: 10px 18px;
+  border-radius: 20px;
+  border: 1px solid var(--evergreen);
+  background: transparent;
+  color: var(--evergreen);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.add-person-top-btn:hover { background: var(--evergreen); color: #f4efe1; }
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(38, 32, 26, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 10;
+}
+
+.modal-card {
+  background: var(--card);
+  border-radius: 4px;
+  max-width: 380px;
+  width: 100%;
+  padding: 32px 28px 28px;
+  position: relative;
+  text-align: center;
+  box-shadow: 0 30px 60px rgba(0,0,0,0.4);
+}
+
+.modal-close {
+  position: absolute;
+  top: 10px; right: 14px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.modal-dates {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin: 0 0 14px;
+}
+
 .view-photos {
   display: flex;
   gap: 10px;
@@ -55,5 +450,78 @@
 }
 .view-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .view-photo .photo-initials { font-size: 34px; }
-/* ---------- NEW: auto-fit scaling support ---------- */
-#treeWrap { overflow: visible; }
+
+#viewName {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 24px;
+  margin: 0 0 4px;
+  color: var(--evergreen-deep);
+}
+
+.add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 18px;
+  text-align: left;
+}
+
+.add-form label {
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.add-form input[type="text"] {
+  width: 100%;
+  margin-top: 5px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  padding: 10px 12px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.add-form button[type="submit"] {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 12px 14px;
+  border-radius: 3px;
+  border: none;
+  background: var(--evergreen);
+  color: #f4efe1;
+  cursor: pointer;
+}
+.add-form button[type="submit"]:hover { background: var(--evergreen-deep); }
+
+.relation-radios {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--ink);
+  background: var(--paper-deep);
+  padding: 10px 12px;
+  border-radius: 4px;
+}
+
+.site-footer {
+  text-align: center;
+  padding: 20px 24px 50px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+/* ---------- MOBILE ---------- */
+@media (max-width: 600px) {
+  .person-card { width: 150px; padding: 8px 8px 10px; }
+  .photo-frame.main-photo { width: 80px; }
+  .photo-frame.spouse-photo { width: 56px; }
+  .fam-tree li { padding: 34px 8px 0 8px; }
+  .fam-tree li::before, .fam-tree li::after,
+  .fam-tree li > ul::before { height: 34px; }
+  .fam-tree ul { padding-top: 34px; }
+}
