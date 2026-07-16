@@ -1,5 +1,5 @@
 /* ============================================================
-   FAMILY ARCHIVE — app logic (auto-fit tree, no manual controls)
+   FAMILY ARCHIVE — app logic (real zoom-based auto-fit)
    ============================================================ */
 
 const SUPABASE_URL = "https://dawznfhpekxkmavhhysp.supabase.co";
@@ -68,7 +68,7 @@ function buildNode(person, allPeople) {
 
 function renderTree(people) {
   const container = document.getElementById("treeContainer");
-  container.style.transform = "none";
+  container.style.zoom = 1;
   container.innerHTML = "";
 
   if (people.length === 0) {
@@ -82,7 +82,6 @@ function renderTree(people) {
     btn.addEventListener("click", () => openAddModal(null));
     emptyWrap.appendChild(btn);
     container.appendChild(emptyWrap);
-    document.getElementById("treeWrap").style.height = "auto";
     return;
   }
 
@@ -96,26 +95,19 @@ function renderTree(people) {
   requestAnimationFrame(fitToScreen);
 }
 
-/* ---------- AUTO-FIT (no buttons — just always shrinks to fit) ---------- */
+/* ---------- AUTO-FIT using real "zoom" (not a visual-only transform) ---------- */
 function fitToScreen() {
   const wrap = document.getElementById("treeWrap");
   const inner = document.getElementById("treeContainer");
 
-  inner.style.transform = "none";
+  inner.style.zoom = 1;
   const naturalWidth = inner.scrollWidth;
-  const naturalHeight = inner.scrollHeight;
   const available = wrap.clientWidth - 24;
 
   let scale = naturalWidth > available ? available / naturalWidth : 1;
   scale = Math.max(scale, 0.32); // never shrink past readable size
 
-  inner.style.transformOrigin = "top center";
-  inner.style.transform = `scale(${scale})`;
-
-  // compensate the wrapper's height so shrinking doesn't leave blank space below
-  wrap.style.height = (naturalHeight * scale + 20) + "px";
-  // if we hit the minimum scale and it still doesn't fit, allow horizontal scroll as a fallback
-  wrap.style.overflowX = (scale <= 0.32 && naturalWidth * scale > available) ? "auto" : "hidden";
+  inner.style.zoom = scale;
 }
 
 window.addEventListener("resize", () => {
