@@ -69,11 +69,11 @@ const cardsLayer = document.getElementById("cards");
 const connectors = document.getElementById("connectors");
 const emptyState = document.getElementById("emptyState");
 
-async function loadTree({ keepView = false } = {}) {
+async function loadTree({ place = "reset" } = {}) {
   const { data, error } = await sb.from("people").select("*").order("created_at", { ascending: true });
   if (error) { console.error(error); return; }
   peopleCache = data || [];
-  render({ keepView });
+  render({ place });
 }
 
 /* ---------- 3. BUILD THE TREE FROM FLAT ROWS ---------- */
@@ -150,23 +150,41 @@ function countDescendants(node) {
   return node.children.reduce((n, c) => n + 1 + countDescendants(c), 0);
 }
 
+/* The overview: the eldest and their children, every branch below folded
+   away behind a count. A wide family opened flat is thousands of pixels
+   across and legible at no zoom level that fits a phone; folded, it's a
+   short row you can walk. Walks real children, not visible ones, so it
+   doesn't depend on what's already collapsed. */
+function collapseToOverview() {
+  collapsed.clear();
+  const walk = (n, depth) => {
+    if (depth >= 1 && n.children.length) collapsed.add(n.person.id);
+    n.children.forEach(c => walk(c, depth + 1));
+  };
+  forest.roots.forEach(r => walk(r, 0));
+}
+
 /* ---------- 4. RENDER ---------- */
-function render({ keepView = false } = {}) {
+/* place: "keep" (leave the camera alone) | "fit" (show everything)
+          | "reset" (the overview shot) */
+function render({ place = "reset" } = {}) {
   emptyState.hidden = peopleCache.length > 0;
   canvas.hidden = peopleCache.length === 0;
   if (!peopleCache.length) return;
 
   forest = buildForest(peopleCache);
+  if (!hasOpened) { hasOpened = true; collapseToOverview(); }
   layout(forest.roots);
 
   const nodes = visibleNodes();
   cardsLayer.innerHTML = "";
   nodes.forEach(n => cardsLayer.appendChild(personCard(n)));
   drawConnectors(nodes);
+  updateExpandBtn();
 
-  if (keepView) applyView();
-  else if (!hasOpened) { hasOpened = true; openingView(); }
-  else fitToScreen();
+  if (place === "keep") applyView();
+  else if (place === "fit") fitToScreen();
+  else resetView();
 }
 
 function initials(name) {
@@ -236,7 +254,7 @@ function personCard(node) {
     toggle.addEventListener("click", (e) => {
       e.stopPropagation();
       if (isCollapsed) collapsed.delete(p.id); else collapsed.add(p.id);
-      render({ keepView: true });
+      render({ place: "keep" });
     });
     card.appendChild(toggle);
   }
@@ -292,12 +310,23 @@ function applyView() {
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-/* Opening shot: the eldest at full size, near the top so their children
-   show underneath. Fitting the whole tree instead means a phone opens on
-   something unreadably small — you'd have to zoom in to learn anything. */
-function openingView() {
+/* Show the overview whole if it's legible that way — on a desktop the
+   folded tree usually fits at near full size. When it doesn't (a phone
+   holds about two cards), start on the eldest at full size and let people
+   swipe, rather than hand them a tree they'd have to zoom in to read. */
+function resetView() {
   const root = forest.roots[0];
   if (!root) { fitToScreen(); return; }
+
+  const box = bounds();
+  const pad = 40;
+  const fitK = Math.min(
+    (viewport.clientWidth - pad * 2) / box.w,
+    (viewport.clientHeight - pad * 2) / box.h,
+    1
+  );
+  if (fitK >= 0.7) { fitToScreen(); return; }
+
   view.k = 1;
   view.x = viewport.clientWidth / 2 - (root.x + CARD / 2) * view.k;
   view.y = Math.max(24, viewport.clientHeight * 0.12) - root.y * view.k;
@@ -335,7 +364,7 @@ function focusPerson(id, k = 1) {
   for (let n = forest.nodes.get(id); n; n = n.parent) {
     if (n.parent) collapsed.delete(n.parent.person.id);
   }
-  render({ keepView: true });
+  render({ place: "keep" });
 
   const node = forest.nodes.get(id);
   if (!node) return;
@@ -428,9 +457,25 @@ cardsLayer.addEventListener("click", (e) => { if (moved) { e.stopPropagation(); 
 document.getElementById("zoomInBtn").addEventListener("click", () => zoomCentre(1.25));
 document.getElementById("zoomOutBtn").addEventListener("click", () => zoomCentre(1 / 1.25));
 document.getElementById("fitBtn").addEventListener("click", fitToScreen);
-document.getElementById("expandAllBtn").addEventListener("click", () => {
-  collapsed.clear();
-  render();
+
+const expandAllBtn = document.getElementById("expandAllBtn");
+
+function updateExpandBtn() {
+  const folded = collapsed.size > 0;
+  expandAllBtn.textContent = folded ? "Expand all" : "Collapse";
+  expandAllBtn.title = folded
+    ? "Open every branch and show the whole tree"
+    : "Fold the branches back to the overview";
+}
+
+expandAllBtn.addEventListener("click", () => {
+  if (collapsed.size > 0) {
+    collapsed.clear();
+    render({ place: "fit" });   // "show me everyone" — fit even if it's small
+  } else {
+    collapseToOverview();
+    render({ place: "reset" });
+  }
 });
 
 /* ---------- 6. PHOTOS TOGGLE ---------- */
@@ -439,7 +484,7 @@ photosToggle.checked = showPhotos;
 photosToggle.addEventListener("change", () => {
   showPhotos = photosToggle.checked;
   localStorage.setItem("familyShowPhotos", showPhotos ? "1" : "0");
-  render({ keepView: true });
+  render({ place: "keep" });
 });
 
 /* ---------- 7. SEARCH ---------- */
@@ -559,7 +604,7 @@ document.getElementById("deleteBtn").addEventListener("click", async () => {
   const { error } = await sb.from("people").delete().eq("id", currentPerson.id);
   if (error) { console.error(error); alert("Could not remove — check the console."); return; }
   personModal.hidden = true;
-  loadTree({ keepView: true });
+  loadTree({ place: "keep" });
 });
 
 /* ---------- 9. ADD / EDIT FORM ---------- */
@@ -619,7 +664,7 @@ personForm.addEventListener("submit", async (e) => {
 
   if (error) { console.error(error); alert("Could not save — check the console."); return; }
   formModal.hidden = true;
-  loadTree({ keepView: true });
+  loadTree({ place: "keep" });
 });
 
 document.addEventListener("keydown", (e) => {
@@ -790,7 +835,7 @@ async function uploadPhoto(personId, column, file) {
     urlData.publicUrl,
     column === "photo_url" ? currentPerson.name : currentPerson.spouse_name
   );
-  await loadTree({ keepView: true });
+  await loadTree({ place: "keep" });
 }
 
 function wireUpload(btnId, inputId, column) {

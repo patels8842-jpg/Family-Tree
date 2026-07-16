@@ -43,19 +43,41 @@ Photos live in the Supabase `photos` storage bucket.
 
 ## Using the site
 
-- **Drag** to move around, **scroll or pinch** to zoom, **Fit** to see everything.
-- **Search** a name to jump straight to that person.
-- **Photos** toggle: cards show initials by default and photos when switched on.
-  The setting is remembered per browser. Full-size photos are always in the
-  person's card, whether or not the toggle is on.
-- **Click a card** to open a person: view and upload photos, add a child or
+It opens on an **overview**: the eldest and their children, with every branch
+below folded behind a **number badge** saying how many people are inside. Tap a
+badge to open that branch, or **Expand all** to unfold the whole tree at once
+(**Collapse** folds it back).
+
+That default exists because the family outgrew the screen. Flat, the tree is
+several thousand pixels wide, and shrinking that onto a phone gives ten-pixel
+cards nobody can read. Folded it's a short row you can walk. A phone fits about
+two cards at readable size, so seven siblings will never all be legible at once
+— that's the screen, not the layout.
+
+- **Drag** to move, **scroll or pinch** to zoom, **Fit** to frame what's open.
+- **Search** a name to jump to anyone, including people inside a folded branch —
+  it unfolds the way to them automatically.
+- **Photos** toggle: cards show initials by default, photos when switched on.
+  Remembered per browser. Full-size photos are always on the person's card
+  either way.
+- **Tap a card** to open a person: view and upload photos, add a child or
   sibling, edit names, or remove them.
 - **+ on a card** adds a child of that person.
-- The **number badge** under a card hides or shows that branch — useful once a
-  generation gets wide. **Expand all** brings everything back.
 
 Removing a person is blocked while they still have children, so nobody gets
 orphaned — remove or re-attach the children first.
+
+## Photos
+
+Uploading opens a cropper: drag to move, pinch or slider to zoom. What's saved
+is a 600px square JPEG, not the phone's original, so a tree full of faces still
+loads quickly. The circle is what a card shows; the corners are kept for the
+person's own card.
+
+The `photos` bucket needs policies allowing the site to read and write it —
+without them every upload fails with a row-level security error that looks
+nothing like a permissions problem. See `storage.objects` in the Supabase
+dashboard.
 
 ---
 
