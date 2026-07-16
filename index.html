@@ -4,10 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow, noarchive">
-<title>Family Archive</title>
+<title>છગન ભા નો પરિવાર</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Noto+Serif+Gujarati:wght@400;600;700&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
@@ -16,8 +16,7 @@
 <div id="lockScreen" class="lock-screen">
   <div class="ledger">
     <div class="ledger-band"></div>
-    <p class="ledger-eyebrow">Private Family Archive</p>
-    <h1 class="ledger-title">The Family Tree</h1>
+    <h1 class="ledger-title" lang="gu">છગન ભા નો પરિવાર</h1>
     <p class="ledger-sub">Enter the family password to open the record.</p>
     <form id="lockForm" autocomplete="off">
       <input type="password" id="passwordInput" placeholder="Password" autocomplete="off" />
@@ -30,29 +29,15 @@
 <!-- MAIN APP -->
 <div id="app" class="app" hidden>
   <header class="site-header">
-    <p class="eyebrow">Private Family Archive</p>
-    <h1>Patel - Chhaganlal Family</h1>
+    <h1 lang="gu">છગન ભા નો પરિવાર</h1>
   </header>
 
-  <div class="toolbar">
-    <div class="toolbar-group search-group">
-      <input type="search" id="searchInput" placeholder="Find a family member…" autocomplete="off" />
-      <div id="searchResults" class="search-results" hidden></div>
-    </div>
-
-    <div class="toolbar-group">
-      <button type="button" id="zoomOutBtn" class="tool-btn" title="Zoom out">−</button>
-      <button type="button" id="zoomInBtn" class="tool-btn" title="Zoom in">+</button>
-      <button type="button" id="fitBtn" class="tool-btn wide" title="Fit the whole tree on screen">Fit</button>
-    </div>
-
-    <div class="toolbar-group">
-      <label class="switch" title="Show photos on the cards">
-        <input type="checkbox" id="photosToggle" />
-        <span>Photos</span>
-      </label>
-      <button type="button" id="expandAllBtn" class="tool-btn wide" title="Expand every branch">Expand all</button>
-    </div>
+  <div class="toolbar toolbar-top">
+    <label class="switch" title="Show photos on the cards">
+      <input type="checkbox" id="photosToggle" />
+      <span>Photos</span>
+    </label>
+    <button type="button" id="expandAllBtn" class="tool-btn wide" title="Expand every branch">Expand all</button>
   </div>
 
   <main id="viewport" class="viewport">
@@ -66,7 +51,20 @@
     </div>
   </main>
 
-  <p class="hint">Drag to move · pinch or scroll to zoom · tap a card to open it · Fit shows everyone</p>
+  <div class="toolbar toolbar-bottom">
+    <div class="toolbar-group search-group">
+      <input type="search" id="searchInput" placeholder="Find a family member…" autocomplete="off" />
+      <div id="searchResults" class="search-results" hidden></div>
+    </div>
+
+    <div class="toolbar-group">
+      <button type="button" id="zoomOutBtn" class="tool-btn" title="Zoom out">−</button>
+      <button type="button" id="zoomInBtn" class="tool-btn" title="Zoom in">+</button>
+      <button type="button" id="fitBtn" class="tool-btn wide" title="Fit the whole tree on screen">Fit</button>
+    </div>
+  </div>
+
+  <p class="hint">Drag to move · pinch or scroll to zoom · tap a card to open it</p>
 </div>
 
 <!-- PERSON DETAIL MODAL -->

@@ -18,6 +18,9 @@
   --shadow: rgba(43, 36, 32, 0.18);
 
   --font-display: "Fraunces", serif;
+  /* Fraunces has no Gujarati glyphs; without this the title falls back to
+     whatever each device happens to have and loses the serif entirely. */
+  --font-gujarati: "Noto Serif Gujarati", "Fraunces", serif;
   --font-body: "Work Sans", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
 
@@ -79,11 +82,12 @@ body {
 }
 
 .ledger-title {
-  font-family: var(--font-display);
+  font-family: var(--font-gujarati);
   font-optical-sizing: auto;
   font-weight: 600;
-  font-size: 34px;
-  margin: 4px 0 10px;
+  font-size: 32px;
+  line-height: 1.45;
+  margin: 10px 0 10px;
   color: var(--evergreen-deep);
 }
 
@@ -133,7 +137,7 @@ body {
   flex-direction: column;
 }
 
-.site-header { text-align: center; padding: 22px 24px 10px; }
+.site-header { text-align: center; padding: 20px 24px 6px; }
 
 .eyebrow {
   font-family: var(--font-mono);
@@ -145,9 +149,10 @@ body {
 }
 
 .site-header h1 {
-  font-family: var(--font-display);
+  font-family: var(--font-gujarati);
   font-weight: 700;
-  font-size: clamp(22px, 4vw, 38px);
+  font-size: clamp(24px, 4vw, 40px);
+  line-height: 1.45; /* Gujarati matras sit above and below; 1.2 clips them */
   margin: 0;
   color: var(--evergreen-deep);
 }
@@ -161,6 +166,9 @@ body {
   flex-wrap: wrap;
   padding: 12px 20px;
 }
+
+.toolbar-top { gap: 14px; padding: 4px 20px 12px; }
+.toolbar-bottom { padding: 12px 20px 6px; }
 
 .toolbar-group { display: flex; align-items: center; gap: 8px; }
 
@@ -178,9 +186,11 @@ body {
 }
 #searchInput:focus { outline: 2px solid var(--gold); outline-offset: 1px; }
 
+/* The search box lives at the bottom of the page, so results open upward —
+   downward would run off the screen. */
 .search-results {
   position: absolute;
-  top: calc(100% + 6px);
+  bottom: calc(100% + 6px);
   left: 0;
   width: 100%;
   background: var(--card);
@@ -297,7 +307,7 @@ body {
 .hint {
   text-align: center;
   margin: 0;
-  padding: 10px 20px 14px;
+  padding: 0 20px 12px;
   font-size: 12px;
   color: var(--ink-soft);
 }
@@ -661,17 +671,18 @@ body {
    Every pixel spent on chrome is a pixel of tree you can't see, so the
    header and toolbar get out of the way on a phone. */
 @media (max-width: 600px) {
-  .site-header { padding: 10px 16px 2px; }
-  .eyebrow { font-size: 9px; letter-spacing: 0.12em; margin-bottom: 3px; }
-  .site-header h1 { font-size: 19px; }
+  .site-header { padding: 10px 16px 0; }
+  .site-header h1 { font-size: 21px; }
 
   .toolbar { gap: 8px; padding: 8px 12px; }
+  .toolbar-top { padding: 2px 12px 8px; }
+  .toolbar-bottom { padding: 8px 12px 4px; gap: 8px; }
   .search-group { flex: 1 1 100%; }
   #searchInput { width: 100%; }
   .tool-btn { height: 32px; min-width: 32px; }
   .tool-btn.wide { padding: 0 10px; font-size: 12px; }
 
-  .hint { font-size: 11px; padding: 6px 12px 8px; }
+  .hint { font-size: 11px; padding: 0 12px 8px; }
 
   .modal-card { padding: 26px 18px 20px; }
   .view-photos { gap: 12px; }
