@@ -1,5 +1,5 @@
 /* ============================================================
-   FAMILY ARCHIVE — app logic (Supabase-powered, nested tree layout)
+   FAMILY ARCHIVE — app logic (simple centered nested tree)
    ============================================================ */
 
 const SUPABASE_URL = "https://dawznfhpekxkmavhhysp.supabase.co";
@@ -43,7 +43,7 @@ if (sessionStorage.getItem("familyArchiveUnlocked") === "1") {
   });
 }
 
-/* ---------- 2. LOAD & RENDER TREE (proper nested structure) ---------- */
+/* ---------- 2. LOAD & RENDER TREE ---------- */
 let peopleCache = [];
 
 async function loadTree() {
@@ -71,7 +71,16 @@ function renderTree(people) {
   container.innerHTML = "";
 
   if (people.length === 0) {
-    container.innerHTML = `<p style="text-align:center;color:var(--ink-soft);">No one in the tree yet — tap "+ Add a person" above to start.</p>`;
+    const emptyWrap = document.createElement("div");
+    emptyWrap.style.textAlign = "center";
+    emptyWrap.innerHTML = `<p style="color:var(--ink-soft);margin-bottom:16px;">No one in the tree yet.</p>`;
+    const btn = document.createElement("button");
+    btn.className = "add-person-top-btn";
+    btn.type = "button";
+    btn.textContent = "+ Add the first person";
+    btn.addEventListener("click", () => openAddModal(null));
+    emptyWrap.appendChild(btn);
+    container.appendChild(emptyWrap);
     return;
   }
 
@@ -81,8 +90,6 @@ function renderTree(people) {
   const rootUl = document.createElement("ul");
   roots.forEach(r => rootUl.appendChild(buildNode(r, people)));
   container.appendChild(rootUl);
-
-  requestAnimationFrame(fitToScreen);
 }
 
 function initials(name) {
@@ -179,31 +186,7 @@ function personCard(p) {
   return card;
 }
 
-/* ---------- 3. ZOOM CONTROLS ---------- */
-let currentZoom = 1;
-
-function setZoom(z) {
-  currentZoom = Math.min(1.5, Math.max(0.15, z));
-  const inner = document.getElementById("zoomInner");
-  inner.style.transform = `scale(${currentZoom})`;
-}
-
-function fitToScreen() {
-  const wrap = document.getElementById("treeWrap");
-  const inner = document.getElementById("zoomInner");
-  inner.style.transform = "scale(1)";
-  const naturalWidth = inner.scrollWidth;
-  const available = wrap.clientWidth - 24;
-  const scale = naturalWidth > available ? available / naturalWidth : 1;
-  setZoom(scale);
-}
-
-document.getElementById("zoomOut").addEventListener("click", () => setZoom(currentZoom - 0.15));
-document.getElementById("zoomIn").addEventListener("click", () => setZoom(currentZoom + 0.15));
-document.getElementById("zoomFit").addEventListener("click", fitToScreen);
-window.addEventListener("resize", () => fitToScreen());
-
-/* ---------- 4. ADD PERSON MODAL ---------- */
+/* ---------- 3. ADD PERSON MODAL ---------- */
 const addModal = document.getElementById("addModal");
 const addForm = document.getElementById("addForm");
 const addNameInput = document.getElementById("addNameInput");
@@ -234,7 +217,6 @@ function openAddModal(contextPerson) {
   addNameInput.focus();
 }
 
-document.getElementById("addPersonBtn").addEventListener("click", () => openAddModal(null));
 document.getElementById("addModalClose").addEventListener("click", () => addModal.hidden = true);
 addModal.addEventListener("click", (e) => { if (e.target === addModal) addModal.hidden = true; });
 
@@ -257,7 +239,7 @@ addForm.addEventListener("submit", async (e) => {
   loadTree();
 });
 
-/* ---------- 5. VIEW PERSON MODAL ---------- */
+/* ---------- 4. VIEW PERSON MODAL ---------- */
 const viewModal = document.getElementById("viewModal");
 
 function fillViewPhoto(container, url, label) {
@@ -295,7 +277,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") { viewModal.hidden = true; addModal.hidden = true; }
 });
 
-/* ---------- 6. PHOTO UPLOAD ---------- */
+/* ---------- 5. PHOTO UPLOAD ---------- */
 async function uploadPhoto(personId, column, file) {
   if (!file) return;
   const ext = file.name.split(".").pop();
