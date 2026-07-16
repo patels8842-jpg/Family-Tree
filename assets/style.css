@@ -171,7 +171,7 @@ body {
 
 .fam-tree {
   display: flex;
-  justify-content: center;
+  justify-content: safe center;
   min-width: min-content;
   width: 100%;
 }
