@@ -1,108 +1,93 @@
-# Family Archive — a private-ish family tree on GitHub Pages
+# Family Archive — a private-ish family tree
 
-A static, free-to-host family tree website. No server, no database —
-just a JSON file, some photos, and GitHub's own tools for editing.
+A static family tree site hosted on GitHub Pages, with the people and photos
+stored in [Supabase](https://supabase.com) so family can add and edit from the
+website itself — no GitHub account, no JSON editing.
 
----
-
-## 1. Put this on GitHub
-
-1. Create a **new GitHub repository** (e.g. `family-tree`). Keep it **Public**
-   (GitHub Pages is only free for public repos on a free account).
-2. Upload all the files in this folder to that repo, keeping the folder
-   structure exactly as it is (`index.html` at the root, `assets/`, `data/`).
-3. Go to **Settings → Pages**.
-   - Source: `Deploy from a branch`
-   - Branch: `main`, folder `/ (root)`
-   - Save. After a minute or two your site is live at:
-     `https://YOUR-USERNAME.github.io/family-tree/`
-4. Send that link only to family — don't post it publicly anywhere.
-
-That's it — hosting is free forever, no ongoing cost.
+There is no build step. `index.html` loads `assets/style.css` and
+`assets/app.js`, and that's the whole app.
 
 ---
 
-## 2. Change the password (do this before sharing the link!)
+## How the tree is drawn
 
-The default password is `family2026`. To set your own:
+Everyone is a row in the Supabase `people` table. A row points at its parent
+with `parent_id`, and that's what forms the tree. Spouses are *fields on the
+person* (`spouse_name`, `spouse_photo_url`) rather than rows of their own, so a
+married couple shares one card.
 
-1. Open any browser, press F12 (or right-click → Inspect) to open DevTools,
-   go to the **Console** tab.
-2. Paste this, replacing `yourpassword` with the real one:
-   ```js
-   crypto.subtle.digest("SHA-256", new TextEncoder().encode("yourpassword"))
-     .then(buf => console.log(Array.from(new Uint8Array(buf))
-       .map(b => b.toString(16).padStart(2, "0")).join("")))
-   ```
-3. Copy the long string it prints out.
-4. In `assets/app.js`, find this line near the top:
-   ```js
-   const PASSWORD_HASH = "7dce034e548b1e319664a6f0d28c30d61f3c5fb9765b76aa8c73bd5e391302fc";
-   ```
-   Replace the string with the one you copied. Commit the change.
+The layout is computed in JavaScript (`layout()` in `assets/app.js`), not by
+CSS. Every card is the same 150px square, leaves are assigned columns left to
+right, and each parent is centred over its own children. That's what keeps
+sibling spacing even and every generation on its own line, however lopsided the
+family gets. The result is drawn onto a pan/zoom canvas, so a tree that's too
+wide for the screen is explored by zooming in rather than by shrinking the
+whole page.
 
-**Important:** this password screen keeps out casual visitors and search
-engines — it is **not real security**. Anyone with real technical skill
-could bypass it, since the page and data are public. Don't put sensitive
-info (SSNs, addresses, anything truly private) in the tree.
+To change the spacing or card size, edit the constants at the top of `app.js`
+(`CARD`, `GAP_X`, `GAP_Y`) — `--card-size` in `style.css` must match `CARD`.
+
+## The `people` table
+
+| column             | meaning                                        |
+| ------------------ | ---------------------------------------------- |
+| `id`               | primary key                                    |
+| `name`             | the person                                     |
+| `spouse_name`      | optional; shown on the same card               |
+| `parent_id`        | `id` of their parent, or empty for the eldest  |
+| `photo_url`        | set by uploading through the site              |
+| `spouse_photo_url` | same, for the spouse                           |
+| `created_at`       | used to order siblings left to right           |
+
+Photos live in the Supabase `photos` storage bucket.
+
+## Using the site
+
+- **Drag** to move around, **scroll or pinch** to zoom, **Fit** to see everything.
+- **Search** a name to jump straight to that person.
+- **Photos** toggle: cards show initials by default and photos when switched on.
+  The setting is remembered per browser. Full-size photos are always in the
+  person's card, whether or not the toggle is on.
+- **Click a card** to open a person: view and upload photos, add a child or
+  sibling, edit names, or remove them.
+- **+ on a card** adds a child of that person.
+- The **number badge** under a card hides or shows that branch — useful once a
+  generation gets wide. **Expand all** brings everything back.
+
+Removing a person is blocked while they still have children, so nobody gets
+orphaned — remove or re-attach the children first.
 
 ---
 
-## 3. Add trusted family members as editors
+## Change the password before sharing
 
-1. Go to **Settings → Collaborators** in your repo.
-2. Click **Add people**, enter their GitHub username or email.
-3. They accept the invite (they'll need a free GitHub account —
-   github.com/join takes two minutes).
+The default is `family2026`. To set your own, get the SHA-256 of the new
+password — in any browser open DevTools (F12) → Console and run:
 
-Now they can edit files directly in the browser, no coding required.
-
----
-
-## 4. How to add a person
-
-Open `data/family.json` in the GitHub web editor (click the file, then the
-pencil icon ✏️). Add a new entry to the `people` list:
-
-```json
-{
-  "id": "p9",
-  "name": "New Person",
-  "born": "1990",
-  "died": "",
-  "photo": "assets/photos/new-person.jpg",
-  "bio": "A short note about them.",
-  "parents": ["p3", "p4"]
-}
+```js
+crypto.subtle.digest("SHA-256", new TextEncoder().encode("yourpassword"))
+  .then(buf => console.log(Array.from(new Uint8Array(buf))
+    .map(b => b.toString(16).padStart(2, "0")).join("")))
 ```
 
-- `id` — must be unique, no spaces.
-- `parents` — the `id`s of their parents (leave empty `[]` for the
-  eldest generation). Two parents will automatically be drawn together
-  as a couple.
-- `photo` — leave as `""` to show their initials instead of a photo.
-- Commit the change (green **Commit changes** button at the bottom).
+Paste the result into `PASSWORD_HASH` near the top of `assets/app.js`, and commit.
 
-## 5. How to add a photo
+## What this password is and isn't
 
-1. Go to the `assets/photos` folder in the repo.
-2. Click **Add file → Upload files**, drag the photo in, and commit.
-3. Edit that person's entry in `family.json` and set:
-   `"photo": "assets/photos/whatever-you-named-it.jpg"`
+**It is not security.** The page, the password hash, and the Supabase key are
+all public in this repo, and the tree is readable and writable by anyone who
+takes the trouble. The password only keeps out casual visitors; `robots.txt`
+and the `noindex` tag only ask search engines not to list the page.
 
-Give photos simple names with no spaces (`grandma-eleanor.jpg`, not
-`Grandma Eleanor (1).jpg`).
+So: share the link with family, not publicly, and keep genuinely sensitive
+details (addresses, dates of birth you'd not want public, anything
+identity-theft-shaped) out of the tree.
 
-The site updates automatically 1–2 minutes after any commit.
+If you want this properly locked down later, the pieces are Supabase Auth for
+real logins plus row-level security policies on `people` and the `photos`
+bucket, which would replace the password gate entirely.
 
----
+## Hosting
 
-## Troubleshooting
-
-- **Site shows a blank tree:** check that `data/family.json` is valid JSON
-  (a missing comma will break it) — GitHub will show a red error marker
-  if so.
-- **Photo doesn't show:** double-check the `photo` path matches the
-  uploaded filename exactly, including capitalization.
-- **Site not updating:** check the **Actions** tab in the repo for a
-  green checkmark confirming the latest deploy succeeded.
+Settings → Pages → deploy from `main` / root. The site updates a minute or two
+after each commit; the Actions tab shows whether the deploy succeeded.

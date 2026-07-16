@@ -32,41 +32,87 @@
   <header class="site-header">
     <p class="eyebrow">Private Family Archive</p>
     <h1>Patel - Chhaganlal Family</h1>
-    <p class="tagline">Tap + on any card to add family, tap a photo to upload, tap a name to view</p>
   </header>
 
-  <main id="treeWrap" class="tree-wrap">
-    <div id="treeContainer" class="fam-tree"></div>
+  <div class="toolbar">
+    <div class="toolbar-group search-group">
+      <input type="search" id="searchInput" placeholder="Find a family member…" autocomplete="off" />
+      <div id="searchResults" class="search-results" hidden></div>
+    </div>
+
+    <div class="toolbar-group">
+      <button type="button" id="zoomOutBtn" class="tool-btn" title="Zoom out">−</button>
+      <button type="button" id="zoomInBtn" class="tool-btn" title="Zoom in">+</button>
+      <button type="button" id="fitBtn" class="tool-btn wide" title="Fit the whole tree on screen">Fit</button>
+    </div>
+
+    <div class="toolbar-group">
+      <label class="switch" title="Show photos on the cards">
+        <input type="checkbox" id="photosToggle" />
+        <span>Photos</span>
+      </label>
+      <button type="button" id="expandAllBtn" class="tool-btn wide" title="Expand every branch">Expand all</button>
+    </div>
+  </div>
+
+  <main id="viewport" class="viewport">
+    <div id="canvas" class="canvas">
+      <svg id="connectors" class="connectors"></svg>
+      <div id="cards" class="cards"></div>
+    </div>
+    <div id="emptyState" class="empty-state" hidden>
+      <p>No one in the tree yet.</p>
+      <button type="button" id="addFirstBtn" class="add-person-top-btn">+ Add the first person</button>
+    </div>
   </main>
 
-  <footer class="site-footer">
-    <p>This tree is shared with family. Anyone with the password can add people and photos.</p>
-  </footer>
+  <p class="hint">Drag to move · scroll or pinch to zoom · click a card to open it</p>
 </div>
 
-<!-- ADD PERSON MODAL -->
-<div id="addModal" class="modal" hidden>
+<!-- PERSON DETAIL MODAL -->
+<div id="personModal" class="modal" hidden>
   <div class="modal-card">
-    <button id="addModalClose" class="modal-close" aria-label="Close">×</button>
-    <h2>Add a person</h2>
-    <form id="addForm" class="add-form">
-      <label>Name<br><input type="text" id="addNameInput" required /></label>
-      <label>Spouse name (optional)<br><input type="text" id="addSpouseInput" /></label>
-      <button type="submit">Add</button>
-    </form>
+    <button id="personModalClose" class="modal-close" aria-label="Close">×</button>
+
+    <div class="view-photos">
+      <figure class="view-person">
+        <div id="viewMainPhoto" class="view-photo"></div>
+        <figcaption id="viewName"></figcaption>
+        <button type="button" id="uploadMainBtn" class="link-btn">Upload photo</button>
+        <input type="file" id="uploadMainInput" accept="image/*" hidden />
+      </figure>
+
+      <figure class="view-person" id="viewSpouseWrap" hidden>
+        <div id="viewSpousePhoto" class="view-photo"></div>
+        <figcaption id="viewSpouseName"></figcaption>
+        <button type="button" id="uploadSpouseBtn" class="link-btn">Upload photo</button>
+        <input type="file" id="uploadSpouseInput" accept="image/*" hidden />
+      </figure>
+    </div>
+
+    <p id="viewRelation" class="modal-dates"></p>
+    <p id="uploadStatus" class="upload-status" hidden></p>
+
+    <div class="modal-actions">
+      <button type="button" id="addChildBtn" class="action-btn primary">+ Add child</button>
+      <button type="button" id="addSiblingBtn" class="action-btn">+ Add sibling</button>
+      <button type="button" id="editBtn" class="action-btn">Edit names</button>
+      <button type="button" id="deleteBtn" class="action-btn danger">Remove</button>
+    </div>
   </div>
 </div>
 
-<!-- VIEW PERSON MODAL -->
-<div id="viewModal" class="modal" hidden>
+<!-- ADD / EDIT PERSON MODAL -->
+<div id="formModal" class="modal" hidden>
   <div class="modal-card">
-    <button id="viewModalClose" class="modal-close" aria-label="Close">×</button>
-    <div class="view-photos">
-      <div id="viewMainPhoto" class="view-photo"></div>
-      <div id="viewSpousePhoto" class="view-photo" hidden></div>
-    </div>
-    <h2 id="viewName"></h2>
-    <p id="viewSpouseName" class="modal-dates"></p>
+    <button id="formModalClose" class="modal-close" aria-label="Close">×</button>
+    <h2 id="formTitle">Add a person</h2>
+    <p id="formContext" class="modal-dates"></p>
+    <form id="personForm" class="add-form">
+      <label>Name<br><input type="text" id="nameInput" required /></label>
+      <label>Spouse name (optional)<br><input type="text" id="spouseInput" /></label>
+      <button type="submit" id="formSubmit">Add</button>
+    </form>
   </div>
 </div>
 

@@ -1,10 +1,22 @@
 /* ============================================================
-   FAMILY ARCHIVE — app logic (real zoom-based auto-fit)
+   FAMILY ARCHIVE — app logic
+   Cards are laid out on a computed coordinate grid, then drawn
+   on a pan/zoom canvas. Every card is the same square size, so
+   spacing stays even no matter how lopsided the family gets.
    ============================================================ */
 
 const SUPABASE_URL = "https://dawznfhpekxkmavhhysp.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRhd3puZmhwZWt4a21hdmhoeXNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5ODUxMzgsImV4cCI6MjA5OTU2MTEzOH0.zri14vTDwzXWflIWPu_zPCSj10BFoQ0TpAoTI8EiipA";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ---------- LAYOUT CONSTANTS ---------- */
+const CARD = 150;      // cards are square: same width and height
+const GAP_X = 30;      // space between two cards side by side
+const GAP_Y = 90;      // vertical space between generations
+const ROW = CARD + GAP_Y;
+const STEP = CARD + GAP_X;
+const MIN_ZOOM = 0.06;
+const MAX_ZOOM = 2.5;
 
 /* ---------- 1. PASSWORD GATE ---------- */
 const PASSWORD_HASH = "7dce034e548b1e319664a6f0d28c30d61f3c5fb9765b76aa8c73bd5e391302fc"; // default: family2026
@@ -43,226 +55,422 @@ if (sessionStorage.getItem("familyArchiveUnlocked") === "1") {
   });
 }
 
-/* ---------- 2. LOAD & RENDER TREE ---------- */
+/* ---------- 2. STATE ---------- */
 let peopleCache = [];
+let forest = { roots: [], nodes: new Map() };
+const collapsed = new Set();          // ids whose descendants are hidden
+let showPhotos = localStorage.getItem("familyShowPhotos") === "1";
+let view = { x: 0, y: 0, k: 1 };      // canvas pan/zoom
 
-async function loadTree() {
+const viewport = document.getElementById("viewport");
+const canvas = document.getElementById("canvas");
+const cardsLayer = document.getElementById("cards");
+const connectors = document.getElementById("connectors");
+const emptyState = document.getElementById("emptyState");
+
+async function loadTree({ keepView = false } = {}) {
   const { data, error } = await sb.from("people").select("*").order("created_at", { ascending: true });
   if (error) { console.error(error); return; }
   peopleCache = data || [];
-  renderTree(peopleCache);
+  render({ keepView });
 }
 
-function buildNode(person, allPeople) {
-  const li = document.createElement("li");
-  li.appendChild(personCard(person));
+/* ---------- 3. BUILD THE TREE FROM FLAT ROWS ---------- */
+function buildForest(people) {
+  const nodes = new Map();
+  people.forEach(p => nodes.set(p.id, { person: p, children: [], parent: null, x: 0, y: 0, depth: 0 }));
 
-  const kids = allPeople.filter(p => p.parent_id === person.id);
-  if (kids.length) {
-    const ul = document.createElement("ul");
-    kids.forEach(k => ul.appendChild(buildNode(k, allPeople)));
-    li.appendChild(ul);
+  const roots = [];
+  people.forEach(p => {
+    const node = nodes.get(p.id);
+    const parent = p.parent_id != null ? nodes.get(p.parent_id) : null;
+    // A person whose parent is missing, is themselves, or would close a
+    // loop is treated as the head of their own branch.
+    if (parent && parent !== node && !wouldLoop(node, parent)) {
+      node.parent = parent;
+      parent.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  });
+  return { roots, nodes };
+}
+
+function wouldLoop(node, parent) {
+  for (let a = parent; a; a = a.parent) if (a === node) return true;
+  return false;
+}
+
+function visibleChildren(node) {
+  return collapsed.has(node.person.id) ? [] : node.children;
+}
+
+/* Assign x/y to every node.
+
+   Leaves are handed the next free column left to right; a parent is then
+   centred over its own children. Because each node's x always lands inside
+   the span of columns its own descendants occupy, and those spans never
+   overlap, two cards in the same row can never be closer than one STEP.
+   That is what keeps sibling spacing even across the whole page. */
+function layout(roots) {
+  let cursor = 0;
+
+  function walk(node, depth) {
+    node.depth = depth;
+    node.y = depth * ROW;
+    const kids = visibleChildren(node);
+    if (!kids.length) {
+      node.x = cursor;
+      cursor += STEP;
+    } else {
+      kids.forEach(k => walk(k, depth + 1));
+      node.x = (kids[0].x + kids[kids.length - 1].x) / 2;
+    }
   }
-  return li;
+
+  roots.forEach((r, i) => {
+    if (i > 0) cursor += STEP; // breathing room between separate branches
+    walk(r, 0);
+  });
 }
 
-function renderTree(people) {
-  const container = document.getElementById("treeContainer");
-  container.style.zoom = 1;
-  container.innerHTML = "";
-
-  if (people.length === 0) {
-    const emptyWrap = document.createElement("div");
-    emptyWrap.style.textAlign = "center";
-    emptyWrap.innerHTML = `<p style="color:var(--ink-soft);margin-bottom:16px;">No one in the tree yet.</p>`;
-    const btn = document.createElement("button");
-    btn.className = "add-person-top-btn";
-    btn.type = "button";
-    btn.textContent = "+ Add the first person";
-    btn.addEventListener("click", () => openAddModal(null));
-    emptyWrap.appendChild(btn);
-    container.appendChild(emptyWrap);
-    return;
-  }
-
-  const idSet = new Set(people.map(p => p.id));
-  const roots = people.filter(p => !p.parent_id || !idSet.has(p.parent_id));
-
-  const rootUl = document.createElement("ul");
-  roots.forEach(r => rootUl.appendChild(buildNode(r, people)));
-  container.appendChild(rootUl);
-
-  requestAnimationFrame(fitToScreen);
+function eachNode(fn) {
+  forest.nodes.forEach(fn);
 }
 
-/* ---------- AUTO-FIT using real "zoom" (not a visual-only transform) ---------- */
-function fitToScreen() {
-  const wrap = document.getElementById("treeWrap");
-  const inner = document.getElementById("treeContainer");
-
-  inner.style.zoom = 1;
-  const naturalWidth = inner.scrollWidth;
-  const available = wrap.clientWidth - 24;
-
-  let scale = naturalWidth > available ? available / naturalWidth : 1;
-  scale = Math.max(scale, 0.32); // never shrink past readable size
-
-  inner.style.zoom = scale;
+function visibleNodes() {
+  const out = [];
+  const walk = (n) => { out.push(n); visibleChildren(n).forEach(walk); };
+  forest.roots.forEach(walk);
+  return out;
 }
 
-window.addEventListener("resize", () => {
-  if (peopleCache.length) fitToScreen();
-});
+function countDescendants(node) {
+  return node.children.reduce((n, c) => n + 1 + countDescendants(c), 0);
+}
+
+/* ---------- 4. RENDER ---------- */
+function render({ keepView = false } = {}) {
+  emptyState.hidden = peopleCache.length > 0;
+  canvas.hidden = peopleCache.length === 0;
+  if (!peopleCache.length) return;
+
+  forest = buildForest(peopleCache);
+  layout(forest.roots);
+
+  const nodes = visibleNodes();
+  cardsLayer.innerHTML = "";
+  nodes.forEach(n => cardsLayer.appendChild(personCard(n)));
+  drawConnectors(nodes);
+
+  if (keepView) applyView(); else fitToScreen();
+}
 
 function initials(name) {
   return (name || "").split(" ").filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
 }
 
-function makePhotoFrame(url, label, onUpload, extraClass) {
-  const frame = document.createElement("div");
-  frame.className = "photo-frame" + (extraClass ? " " + extraClass : "");
-
-  if (url) {
+function avatar(url, label) {
+  const el = document.createElement("div");
+  el.className = "avatar";
+  if (showPhotos && url) {
     const img = document.createElement("img");
     img.src = url;
     img.alt = label;
-    frame.appendChild(img);
+    img.loading = "lazy";
+    el.appendChild(img);
   } else {
-    const div = document.createElement("div");
-    div.className = "photo-initials";
-    div.textContent = label;
-    frame.appendChild(div);
+    el.textContent = initials(label);
+    el.classList.add("avatar-initials");
   }
-  ["tl", "tr", "bl", "br"].forEach(c => {
-    const corner = document.createElement("div");
-    corner.className = `corner ${c}`;
-    frame.appendChild(corner);
-  });
-
-  const camBtn = document.createElement("button");
-  camBtn.className = "camera-btn";
-  camBtn.type = "button";
-  camBtn.title = "Upload photo";
-  camBtn.textContent = "📷";
-  const fileInput = document.createElement("input");
-  fileInput.type = "file";
-  fileInput.accept = "image/*";
-  fileInput.hidden = true;
-  fileInput.addEventListener("change", (e) => {
-    e.stopPropagation();
-    onUpload(fileInput.files[0]);
-  });
-  camBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    fileInput.click();
-  });
-  frame.appendChild(camBtn);
-  frame.appendChild(fileInput);
-
-  return frame;
+  return el;
 }
 
-function personCard(p) {
+function personCard(node) {
+  const p = node.person;
   const card = document.createElement("div");
-  card.className = "person-card";
+  card.className = "card";
   card.dataset.id = p.id;
+  card.style.left = node.x + "px";
+  card.style.top = node.y + "px";
+  card.tabIndex = 0;
+  card.setAttribute("role", "button");
+  card.setAttribute("aria-label", `Open ${p.name}`);
 
-  const photosRow = document.createElement("div");
-  photosRow.className = "photos-row";
-  photosRow.addEventListener("click", () => openViewModal(p));
-
-  const mainFrame = makePhotoFrame(p.photo_url, initials(p.name), (file) => uploadPhoto(p.id, "photo_url", file), "main-photo");
-  photosRow.appendChild(mainFrame);
-
-  if (p.spouse_name) {
-    const spouseFrame = makePhotoFrame(p.spouse_photo_url, initials(p.spouse_name), (file) => uploadPhoto(p.id, "spouse_photo_url", file), "spouse-photo");
-    photosRow.appendChild(spouseFrame);
-  }
-  card.appendChild(photosRow);
-
-  const nameWrap = document.createElement("div");
-  nameWrap.className = "name-wrap";
-  nameWrap.addEventListener("click", () => openViewModal(p));
+  const avatars = document.createElement("div");
+  avatars.className = "avatars";
+  avatars.appendChild(avatar(p.photo_url, p.name));
+  if (p.spouse_name) avatars.appendChild(avatar(p.spouse_photo_url, p.spouse_name));
+  card.appendChild(avatars);
 
   const name = document.createElement("div");
-  name.className = "person-name";
+  name.className = "card-name";
   name.textContent = p.name;
-  nameWrap.appendChild(name);
+  card.appendChild(name);
 
   if (p.spouse_name) {
     const spouse = document.createElement("div");
-    spouse.className = "spouse-name";
-    spouse.textContent = `(${p.spouse_name})`;
-    nameWrap.appendChild(spouse);
+    spouse.className = "card-spouse";
+    spouse.textContent = p.spouse_name;
+    card.appendChild(spouse);
   }
-  card.appendChild(nameWrap);
 
-  const plusBtn = document.createElement("button");
-  plusBtn.className = "plus-btn";
-  plusBtn.type = "button";
-  plusBtn.title = "Add sibling or child";
-  plusBtn.textContent = "+";
-  plusBtn.addEventListener("click", (e) => { e.stopPropagation(); openAddModal(p); });
-  card.appendChild(plusBtn);
+  const plus = document.createElement("button");
+  plus.className = "card-add";
+  plus.type = "button";
+  plus.title = `Add a child of ${p.name}`;
+  plus.textContent = "+";
+  plus.addEventListener("click", (e) => { e.stopPropagation(); openForm({ mode: "add", relation: "child", context: p }); });
+  card.appendChild(plus);
 
+  if (node.children.length) {
+    const isCollapsed = collapsed.has(p.id);
+    const toggle = document.createElement("button");
+    toggle.className = "card-toggle" + (isCollapsed ? " is-collapsed" : "");
+    toggle.type = "button";
+    toggle.title = isCollapsed ? "Show this branch" : "Hide this branch";
+    toggle.textContent = isCollapsed ? String(countDescendants(node)) : "−";
+    toggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (isCollapsed) collapsed.delete(p.id); else collapsed.add(p.id);
+      render({ keepView: true });
+    });
+    card.appendChild(toggle);
+  }
+
+  card.addEventListener("click", () => openPerson(p));
+  card.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPerson(p); }
+  });
   return card;
 }
 
-/* ---------- 3. ADD PERSON MODAL ---------- */
-const addModal = document.getElementById("addModal");
-const addForm = document.getElementById("addForm");
-const addNameInput = document.getElementById("addNameInput");
-const addSpouseInput = document.getElementById("addSpouseInput");
-let addContext = { contextPerson: null };
+/* Orthogonal elbows: a trunk down from the parent, a bar across the
+   children, and a drop into the top of each child. */
+function drawConnectors(nodes) {
+  const parts = [];
+  nodes.forEach(node => {
+    const kids = visibleChildren(node);
+    if (!kids.length) return;
 
-function openAddModal(contextPerson) {
-  const existingRadios = document.getElementById("relationRadios");
-  if (existingRadios) existingRadios.remove();
+    const cx = node.x + CARD / 2;
+    const top = node.y + CARD;
+    const midY = top + GAP_Y / 2;
 
-  if (contextPerson) {
-    const radiosDiv = document.createElement("div");
-    radiosDiv.id = "relationRadios";
-    radiosDiv.className = "relation-radios";
-    radiosDiv.innerHTML = `
-      <label><input type="radio" name="relation" value="child" checked /> Son / Daughter of ${contextPerson.name}</label>
-      <label><input type="radio" name="relation" value="sibling" /> Brother / Sister of ${contextPerson.name}</label>
-    `;
-    addForm.insertBefore(radiosDiv, addForm.firstChild);
-    addContext = { contextPerson };
-  } else {
-    addContext = { contextPerson: null };
-  }
+    parts.push(`M ${cx} ${top} V ${midY}`);
+    if (kids.length > 1) {
+      parts.push(`M ${kids[0].x + CARD / 2} ${midY} H ${kids[kids.length - 1].x + CARD / 2}`);
+    }
+    kids.forEach(k => parts.push(`M ${k.x + CARD / 2} ${midY} V ${k.y}`));
+  });
 
-  addNameInput.value = "";
-  addSpouseInput.value = "";
-  addModal.hidden = false;
-  addNameInput.focus();
+  const box = bounds();
+  connectors.setAttribute("width", box.w);
+  connectors.setAttribute("height", box.h);
+  connectors.innerHTML = parts.length
+    ? `<path d="${parts.join(" ")}" />`
+    : "";
 }
 
-document.getElementById("addModalClose").addEventListener("click", () => addModal.hidden = true);
-addModal.addEventListener("click", (e) => { if (e.target === addModal) addModal.hidden = true; });
+function bounds() {
+  const nodes = visibleNodes();
+  if (!nodes.length) return { x: 0, y: 0, w: 0, h: 0 };
+  const xs = nodes.map(n => n.x);
+  const ys = nodes.map(n => n.y);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return { x, y, w: Math.max(...xs) + CARD - x, h: Math.max(...ys) + CARD - y };
+}
 
-addForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const name = addNameInput.value.trim();
-  const spouse = addSpouseInput.value.trim();
-  if (!name) return;
+/* ---------- 5. PAN & ZOOM ---------- */
+function applyView() {
+  canvas.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.k})`;
+}
 
-  let parent_id = null;
-  if (addContext.contextPerson) {
-    const relation = addForm.querySelector('input[name="relation"]:checked').value;
-    parent_id = relation === "child" ? addContext.contextPerson.id : addContext.contextPerson.parent_id;
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+function fitToScreen() {
+  const box = bounds();
+  if (!box.w) return;
+  const pad = 40;
+  const w = viewport.clientWidth - pad * 2;
+  const h = viewport.clientHeight - pad * 2;
+  const k = clamp(Math.min(w / box.w, h / box.h, 1), MIN_ZOOM, MAX_ZOOM);
+  view.k = k;
+  view.x = (viewport.clientWidth - box.w * k) / 2 - box.x * k;
+  view.y = (viewport.clientHeight - box.h * k) / 2 - box.y * k;
+  applyView();
+}
+
+function zoomAt(px, py, factor) {
+  const k = clamp(view.k * factor, MIN_ZOOM, MAX_ZOOM);
+  const f = k / view.k;
+  view.x = px - (px - view.x) * f;
+  view.y = py - (py - view.y) * f;
+  view.k = k;
+  applyView();
+}
+
+function zoomCentre(factor) {
+  zoomAt(viewport.clientWidth / 2, viewport.clientHeight / 2, factor);
+}
+
+/* Put a person in the middle of the screen at a readable zoom. */
+function focusPerson(id, k = 1) {
+  for (let n = forest.nodes.get(id); n; n = n.parent) {
+    if (n.parent) collapsed.delete(n.parent.person.id);
   }
+  render({ keepView: true });
 
-  const { error } = await sb.from("people").insert({ name, spouse_name: spouse || null, parent_id });
-  if (error) { console.error(error); alert("Could not add person — check console."); return; }
+  const node = forest.nodes.get(id);
+  if (!node) return;
+  view.k = clamp(k, MIN_ZOOM, MAX_ZOOM);
+  view.x = viewport.clientWidth / 2 - (node.x + CARD / 2) * view.k;
+  view.y = viewport.clientHeight / 2 - (node.y + CARD / 2) * view.k;
+  applyView();
 
-  addModal.hidden = true;
-  loadTree();
+  const card = cardsLayer.querySelector(`[data-id="${id}"]`);
+  if (card) {
+    card.classList.add("is-found");
+    setTimeout(() => card.classList.remove("is-found"), 1600);
+  }
+}
+
+viewport.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const r = viewport.getBoundingClientRect();
+  zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0015));
+}, { passive: false });
+
+const pointers = new Map();
+let panStart = null;
+let pinchStart = null;
+let moved = false;
+
+viewport.addEventListener("pointerdown", (e) => {
+  if (e.target.closest("button")) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  moved = false;
+
+  if (pointers.size === 1) {
+    panStart = { x: e.clientX - view.x, y: e.clientY - view.y };
+    viewport.classList.add("is-panning");
+  } else if (pointers.size === 2) {
+    panStart = null;
+    pinchStart = pinchState();
+  }
 });
 
-/* ---------- 4. VIEW PERSON MODAL ---------- */
-const viewModal = document.getElementById("viewModal");
+viewport.addEventListener("pointermove", (e) => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (pointers.size === 1 && panStart) {
+    const nx = e.clientX - panStart.x;
+    const ny = e.clientY - panStart.y;
+    if (Math.abs(nx - view.x) > 3 || Math.abs(ny - view.y) > 3) moved = true;
+    view.x = nx;
+    view.y = ny;
+    applyView();
+  } else if (pointers.size === 2 && pinchStart) {
+    const now = pinchState();
+    const r = viewport.getBoundingClientRect();
+    const k = clamp(pinchStart.k * (now.dist / pinchStart.dist), MIN_ZOOM, MAX_ZOOM);
+    const f = k / view.k;
+    const px = now.cx - r.left, py = now.cy - r.top;
+    view.x = px - (px - view.x) * f;
+    view.y = py - (py - view.y) * f;
+    view.k = k;
+    moved = true;
+    applyView();
+  }
+});
+
+function pinchState() {
+  const [a, b] = [...pointers.values()];
+  return {
+    dist: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+    cx: (a.x + b.x) / 2,
+    cy: (a.y + b.y) / 2,
+    k: view.k
+  };
+}
+
+function endPointer(e) {
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) pinchStart = null;
+  if (pointers.size === 0) {
+    panStart = null;
+    viewport.classList.remove("is-panning");
+  }
+}
+viewport.addEventListener("pointerup", endPointer);
+viewport.addEventListener("pointercancel", endPointer);
+
+// A drag that ends on a card shouldn't also open that card.
+cardsLayer.addEventListener("click", (e) => { if (moved) { e.stopPropagation(); moved = false; } }, true);
+
+document.getElementById("zoomInBtn").addEventListener("click", () => zoomCentre(1.25));
+document.getElementById("zoomOutBtn").addEventListener("click", () => zoomCentre(1 / 1.25));
+document.getElementById("fitBtn").addEventListener("click", fitToScreen);
+document.getElementById("expandAllBtn").addEventListener("click", () => {
+  collapsed.clear();
+  render();
+});
+
+/* ---------- 6. PHOTOS TOGGLE ---------- */
+const photosToggle = document.getElementById("photosToggle");
+photosToggle.checked = showPhotos;
+photosToggle.addEventListener("change", () => {
+  showPhotos = photosToggle.checked;
+  localStorage.setItem("familyShowPhotos", showPhotos ? "1" : "0");
+  render({ keepView: true });
+});
+
+/* ---------- 7. SEARCH ---------- */
+const searchInput = document.getElementById("searchInput");
+const searchResults = document.getElementById("searchResults");
+
+searchInput.addEventListener("input", () => {
+  const q = searchInput.value.trim().toLowerCase();
+  if (!q) { searchResults.hidden = true; return; }
+
+  const hits = peopleCache.filter(p =>
+    (p.name || "").toLowerCase().includes(q) ||
+    (p.spouse_name || "").toLowerCase().includes(q)
+  ).slice(0, 8);
+
+  searchResults.innerHTML = "";
+  if (!hits.length) {
+    const none = document.createElement("div");
+    none.className = "search-none";
+    none.textContent = "No one by that name";
+    searchResults.appendChild(none);
+  } else {
+    hits.forEach(p => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "search-item";
+      item.textContent = p.spouse_name ? `${p.name} & ${p.spouse_name}` : p.name;
+      item.addEventListener("click", () => {
+        focusPerson(p.id);
+        searchResults.hidden = true;
+        searchInput.value = "";
+      });
+      searchResults.appendChild(item);
+    });
+  }
+  searchResults.hidden = false;
+});
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".search-group")) searchResults.hidden = true;
+});
+
+/* ---------- 8. PERSON DETAIL MODAL ---------- */
+const personModal = document.getElementById("personModal");
+const uploadStatus = document.getElementById("uploadStatus");
+let currentPerson = null;
 
 function fillViewPhoto(container, url, label) {
   container.innerHTML = "";
@@ -274,44 +482,172 @@ function fillViewPhoto(container, url, label) {
   } else {
     const div = document.createElement("div");
     div.className = "photo-initials";
-    div.textContent = label;
+    div.textContent = initials(label);
     container.appendChild(div);
   }
 }
 
-function openViewModal(p) {
-  fillViewPhoto(document.getElementById("viewMainPhoto"), p.photo_url, initials(p.name));
-  const spouseDiv = document.getElementById("viewSpousePhoto");
-  if (p.spouse_name) {
-    spouseDiv.hidden = false;
-    fillViewPhoto(spouseDiv, p.spouse_photo_url, initials(p.spouse_name));
-  } else {
-    spouseDiv.hidden = true;
-  }
+function openPerson(p) {
+  currentPerson = p;
+  uploadStatus.hidden = true;
+
+  fillViewPhoto(document.getElementById("viewMainPhoto"), p.photo_url, p.name);
   document.getElementById("viewName").textContent = p.name;
-  document.getElementById("viewSpouseName").textContent = p.spouse_name ? `Spouse: ${p.spouse_name}` : "";
-  viewModal.hidden = false;
+  document.getElementById("uploadMainBtn").textContent = p.photo_url ? "Change photo" : "Upload photo";
+
+  const spouseWrap = document.getElementById("viewSpouseWrap");
+  if (p.spouse_name) {
+    spouseWrap.hidden = false;
+    fillViewPhoto(document.getElementById("viewSpousePhoto"), p.spouse_photo_url, p.spouse_name);
+    document.getElementById("viewSpouseName").textContent = p.spouse_name;
+    document.getElementById("uploadSpouseBtn").textContent = p.spouse_photo_url ? "Change photo" : "Upload photo";
+  } else {
+    spouseWrap.hidden = true;
+  }
+
+  const node = forest.nodes.get(p.id);
+  const parent = node && node.parent ? node.parent.person : null;
+  const kids = node ? node.children.length : 0;
+  const bits = [];
+  if (parent) bits.push(`Child of ${parent.name}`);
+  if (kids) bits.push(`${kids} ${kids === 1 ? "child" : "children"}`);
+  document.getElementById("viewRelation").textContent = bits.join(" · ");
+
+  document.getElementById("addSiblingBtn").hidden = !parent;
+  personModal.hidden = false;
 }
 
-document.getElementById("viewModalClose").addEventListener("click", () => viewModal.hidden = true);
-viewModal.addEventListener("click", (e) => { if (e.target === viewModal) viewModal.hidden = true; });
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { viewModal.hidden = true; addModal.hidden = true; }
+document.getElementById("personModalClose").addEventListener("click", () => personModal.hidden = true);
+personModal.addEventListener("click", (e) => { if (e.target === personModal) personModal.hidden = true; });
+
+document.getElementById("addChildBtn").addEventListener("click", () => {
+  personModal.hidden = true;
+  openForm({ mode: "add", relation: "child", context: currentPerson });
+});
+document.getElementById("addSiblingBtn").addEventListener("click", () => {
+  personModal.hidden = true;
+  openForm({ mode: "add", relation: "sibling", context: currentPerson });
+});
+document.getElementById("editBtn").addEventListener("click", () => {
+  personModal.hidden = true;
+  openForm({ mode: "edit", context: currentPerson });
 });
 
-/* ---------- 5. PHOTO UPLOAD ---------- */
+document.getElementById("deleteBtn").addEventListener("click", async () => {
+  const node = forest.nodes.get(currentPerson.id);
+  if (node && node.children.length) {
+    alert(`${currentPerson.name} still has ${node.children.length} child(ren) in the tree.\n\nRemove or re-attach them first, so nobody gets orphaned.`);
+    return;
+  }
+  if (!confirm(`Remove ${currentPerson.name} from the tree? This cannot be undone.`)) return;
+
+  const { error } = await sb.from("people").delete().eq("id", currentPerson.id);
+  if (error) { console.error(error); alert("Could not remove — check the console."); return; }
+  personModal.hidden = true;
+  loadTree({ keepView: true });
+});
+
+/* ---------- 9. ADD / EDIT FORM ---------- */
+const formModal = document.getElementById("formModal");
+const personForm = document.getElementById("personForm");
+const nameInput = document.getElementById("nameInput");
+const spouseInput = document.getElementById("spouseInput");
+let formState = { mode: "add", relation: "child", context: null };
+
+function openForm({ mode, relation = "child", context }) {
+  formState = { mode, relation, context };
+
+  const title = document.getElementById("formTitle");
+  const ctxLine = document.getElementById("formContext");
+  const submit = document.getElementById("formSubmit");
+
+  if (mode === "edit") {
+    title.textContent = "Edit names";
+    ctxLine.textContent = "";
+    submit.textContent = "Save";
+    nameInput.value = context.name || "";
+    spouseInput.value = context.spouse_name || "";
+  } else {
+    title.textContent = "Add a person";
+    ctxLine.textContent = !context ? ""
+      : relation === "child" ? `Son or daughter of ${context.name}`
+      : `Brother or sister of ${context.name}`;
+    submit.textContent = "Add";
+    nameInput.value = "";
+    spouseInput.value = "";
+  }
+
+  formModal.hidden = false;
+  nameInput.focus();
+}
+
+document.getElementById("formModalClose").addEventListener("click", () => formModal.hidden = true);
+formModal.addEventListener("click", (e) => { if (e.target === formModal) formModal.hidden = true; });
+document.getElementById("addFirstBtn").addEventListener("click", () => openForm({ mode: "add", context: null }));
+
+personForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = nameInput.value.trim();
+  const spouse = spouseInput.value.trim() || null;
+  if (!name) return;
+
+  const { mode, relation, context } = formState;
+  let error;
+
+  if (mode === "edit") {
+    ({ error } = await sb.from("people").update({ name, spouse_name: spouse }).eq("id", context.id));
+  } else {
+    let parent_id = null;
+    if (context) parent_id = relation === "child" ? context.id : context.parent_id;
+    ({ error } = await sb.from("people").insert({ name, spouse_name: spouse, parent_id }));
+  }
+
+  if (error) { console.error(error); alert("Could not save — check the console."); return; }
+  formModal.hidden = true;
+  loadTree({ keepView: true });
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") { personModal.hidden = true; formModal.hidden = true; }
+});
+
+/* ---------- 10. PHOTO UPLOAD ---------- */
 async function uploadPhoto(personId, column, file) {
   if (!file) return;
-  const ext = file.name.split(".").pop();
+
+  uploadStatus.hidden = false;
+  uploadStatus.textContent = "Uploading…";
+
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
   const path = `person_${personId}_${column}_${Date.now()}.${ext}`;
 
   const { error: uploadError } = await sb.storage.from("photos").upload(path, file, { upsert: true });
-  if (uploadError) { console.error(uploadError); alert("Upload failed — check console."); return; }
+  if (uploadError) { console.error(uploadError); uploadStatus.textContent = "Upload failed — check the console."; return; }
 
   const { data: urlData } = sb.storage.from("photos").getPublicUrl(path);
-
   const { error: updateError } = await sb.from("people").update({ [column]: urlData.publicUrl }).eq("id", personId);
-  if (updateError) { console.error(updateError); alert("Could not save photo link — check console."); return; }
+  if (updateError) { console.error(updateError); uploadStatus.textContent = "Could not save the photo — check the console."; return; }
 
-  loadTree();
+  uploadStatus.textContent = "Saved.";
+  currentPerson = { ...currentPerson, [column]: urlData.publicUrl };
+  fillViewPhoto(
+    document.getElementById(column === "photo_url" ? "viewMainPhoto" : "viewSpousePhoto"),
+    urlData.publicUrl,
+    column === "photo_url" ? currentPerson.name : currentPerson.spouse_name
+  );
+  await loadTree({ keepView: true });
 }
+
+function wireUpload(btnId, inputId, column) {
+  const btn = document.getElementById(btnId);
+  const input = document.getElementById(inputId);
+  btn.addEventListener("click", () => input.click());
+  input.addEventListener("change", () => {
+    uploadPhoto(currentPerson.id, column, input.files[0]);
+    input.value = "";
+  });
+}
+wireUpload("uploadMainBtn", "uploadMainInput", "photo_url");
+wireUpload("uploadSpouseBtn", "uploadSpouseInput", "spouse_photo_url");
+
+window.addEventListener("resize", () => { if (peopleCache.length) applyView(); });
