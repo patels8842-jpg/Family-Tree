@@ -1,5 +1,5 @@
 /* ============================================================
-   FAMILY ARCHIVE — app logic (simple centered nested tree)
+   FAMILY ARCHIVE — app logic (auto-fit tree, no manual controls)
    ============================================================ */
 
 const SUPABASE_URL = "https://dawznfhpekxkmavhhysp.supabase.co";
@@ -68,6 +68,7 @@ function buildNode(person, allPeople) {
 
 function renderTree(people) {
   const container = document.getElementById("treeContainer");
+  container.style.transform = "none";
   container.innerHTML = "";
 
   if (people.length === 0) {
@@ -81,6 +82,7 @@ function renderTree(people) {
     btn.addEventListener("click", () => openAddModal(null));
     emptyWrap.appendChild(btn);
     container.appendChild(emptyWrap);
+    document.getElementById("treeWrap").style.height = "auto";
     return;
   }
 
@@ -90,7 +92,35 @@ function renderTree(people) {
   const rootUl = document.createElement("ul");
   roots.forEach(r => rootUl.appendChild(buildNode(r, people)));
   container.appendChild(rootUl);
+
+  requestAnimationFrame(fitToScreen);
 }
+
+/* ---------- AUTO-FIT (no buttons — just always shrinks to fit) ---------- */
+function fitToScreen() {
+  const wrap = document.getElementById("treeWrap");
+  const inner = document.getElementById("treeContainer");
+
+  inner.style.transform = "none";
+  const naturalWidth = inner.scrollWidth;
+  const naturalHeight = inner.scrollHeight;
+  const available = wrap.clientWidth - 24;
+
+  let scale = naturalWidth > available ? available / naturalWidth : 1;
+  scale = Math.max(scale, 0.32); // never shrink past readable size
+
+  inner.style.transformOrigin = "top center";
+  inner.style.transform = `scale(${scale})`;
+
+  // compensate the wrapper's height so shrinking doesn't leave blank space below
+  wrap.style.height = (naturalHeight * scale + 20) + "px";
+  // if we hit the minimum scale and it still doesn't fit, allow horizontal scroll as a fallback
+  wrap.style.overflowX = (scale <= 0.32 && naturalWidth * scale > available) ? "auto" : "hidden";
+}
+
+window.addEventListener("resize", () => {
+  if (peopleCache.length) fitToScreen();
+});
 
 function initials(name) {
   return (name || "").split(" ").filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
