@@ -167,13 +167,14 @@ body {
   width: 100%;
   overflow-x: auto;
   padding: 30px 12px 70px;
+  display: flex;
+  justify-content: safe center;
 }
 
 .fam-tree {
   display: flex;
   justify-content: safe center;
   min-width: min-content;
-  width: 100%;
 }
 
 /* ---------- TREE STRUCTURE (nested org-chart style) ---------- */
