@@ -19,7 +19,7 @@ const MIN_ZOOM = 0.06;
 const MAX_ZOOM = 2.5;
 
 /* ---------- 1. PASSWORD GATE ---------- */
-const PASSWORD_HASH = "7dce034e548b1e319664a6f0d28c30d61f3c5fb9765b76aa8c73bd5e391302fc"; // default: family2026
+const PASSWORD_HASH = "461badd6ce85d89f47b876ce2fc8577c6fe22bb0b986f56bea69bf62faf1f9f3";
 
 async function sha256(text) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));

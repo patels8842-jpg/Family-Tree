@@ -81,10 +81,10 @@ dashboard.
 
 ---
 
-## Change the password before sharing
+## Changing the password
 
-The default is `family2026`. To set your own, get the SHA-256 of the new
-password — in any browser open DevTools (F12) → Console and run:
+To set a new one, get its SHA-256 — in any browser open DevTools (F12) →
+Console and run:
 
 ```js
 crypto.subtle.digest("SHA-256", new TextEncoder().encode("yourpassword"))
@@ -100,6 +100,13 @@ Paste the result into `PASSWORD_HASH` near the top of `assets/app.js`, and commi
 all public in this repo, and the tree is readable and writable by anyone who
 takes the trouble. The password only keeps out casual visitors; `robots.txt`
 and the `noindex` tag only ask search engines not to list the page.
+
+The hash being public matters more than it sounds: a short or common password
+is recovered from its SHA-256 in seconds by anyone who thinks to try, because
+they can test guesses offline against the hash sitting in this file. Length is
+the only thing that helps — but nothing here makes the tree genuinely private,
+so choose the password for whether family will remember it, not for strength
+it can't have.
 
 So: share the link with family, not publicly, and keep genuinely sensitive
 details (addresses, dates of birth you'd not want public, anything
