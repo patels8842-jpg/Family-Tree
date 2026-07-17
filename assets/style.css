@@ -8,6 +8,9 @@
      as an empty page. On the evergreen the same cards are ~9:1. */
   --canvas: #3F5142;
   --canvas-deep: #263229;
+  /* Brighter than --gold: the branches carry the structure, and gold sat at
+     4.7:1 on the canvas where this sits near 7.5:1. */
+  --branch: #E0C68F;
   --ink: #2B2420;
   --ink-soft: #6b5f4f;
   --evergreen: #37473A;
@@ -281,11 +284,12 @@ body {
 }
 .connectors path {
   fill: none;
-  stroke: var(--gold);
-  stroke-width: 2;
-  stroke-linecap: square;
+  stroke: var(--branch);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   /* Without this the canvas transform scales the stroke too, so zoomed out
-     to fit the family the branches thin to 0.45px and disappear. */
+     to fit the family the branches thin to sub-pixel and disappear. */
   vector-effect: non-scaling-stroke;
 }
 

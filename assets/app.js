@@ -12,10 +12,14 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 /* ---------- LAYOUT CONSTANTS ---------- */
 const CARD = 150;      // cards are square: same width and height
 const GAP_X = 30;      // space between two cards side by side
-const GAP_Y = 90;      // vertical space between generations
+/* A wide family is width-bound when fitted — 5900px across against 900
+   tall — so height is the one thing going spare. Spending it here is what
+   gives the branches somewhere to be seen at low zoom; sideways there's
+   nothing to give, since widening also widens the tree. */
+const GAP_Y = 170;     // vertical space between generations
 const ROW = CARD + GAP_Y;
 const STEP = CARD + GAP_X;
-const MIN_ZOOM = 0.06;
+const MIN_ZOOM = 0.03; // low enough that a big family still fits when asked
 const MAX_ZOOM = 2.5;
 
 /* ---------- 1. PASSWORD GATE ---------- */
